@@ -20,6 +20,9 @@ Features
 */
 
 import React, { useEffect, useMemo, useState } from "react";
+import { supabase } from "./lib/supabaseClient";
+import { loadPresets, savePreset, deletePreset, PresetRecord, PresetPayload } from "./lib/presets";
+
 
 // ---------- Types ----------
 
@@ -348,8 +351,55 @@ export default function OnboardingClassifier() {
   const [vw, setVw] = useState<VarWeights>(defaultVarWeights());
   const [th, setTh] = useState<Thresholds>(defaultThresholds());
   const [showAdvanced, setShowAdvanced] = useState(false);
+const [presetMsg, setPresetMsg] = useState("");
 
-  // Scenario compare (A/B) in localStorage
+
+  // Presets
+const [presets, setPresets] = useState<PresetRecord[]>([]);
+const [presetName, setPresetName] = useState("");
+const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+const [loadingPresets, setLoadingPresets] = useState(false);
+
+async function refreshPresets() {
+  setLoadingPresets(true);
+  const list = await loadPresets();
+  setPresets(list);
+  setLoadingPresets(false);
+}
+
+useEffect(() => { refreshPresets(); }, []);
+
+async function handleSavePreset() {
+  setPresetMsg("Opslaan…");
+  try {
+    const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.1" };
+    await savePreset(presetName, payload);
+    setPresetMsg("Opgeslagen ✔");
+    setPresetName("");
+    await refreshPresets();
+  } catch (e: any) {
+    console.error("savePreset failed", e);
+    setPresetMsg("Fout bij opslaan — zie Console");
+  }
+}
+
+async function handleApplyPreset() {
+  const rec = presets.find(p => (p.id ?? p.name) === selectedPresetId);
+  if (!rec) return;
+  const data = rec.data;
+  setInputs(data.inputs);
+  setGw(data.gw);
+  setVw(data.vw);
+  setTh(data.th);
+}
+async function handleDeletePreset() {
+  if (!selectedPresetId) return;
+  await deletePreset(selectedPresetId);
+  setSelectedPresetId("");
+  await refreshPresets();
+}
+
+// Scenario compare (A/B) in localStorage
   const [scenarioName, setScenarioName] = useState("Scenario A");
   const [otherScenario, setOtherScenario] = useState<any | null>(null);
 
@@ -437,6 +487,86 @@ export default function OnboardingClassifier() {
           <button onClick={resetAll} style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff" }}>Reset</button>
         </div>
       </div>
+
+{/* --- PRESETS CARD --- */}
+<div data-id="presets-card" style={{ ...card, ...section }}>
+  <h2 style={h2}>Presets</h2>
+  <div style={grid3}>
+    <div>
+      <label style={label}>Naam</label>
+      <input
+        style={input}
+        placeholder="Bijv. Klant X – Q4"
+        value={presetName}
+        onChange={(e) => setPresetName(e.target.value)}
+      />
+      <button
+        onClick={handleSavePreset}
+        style={{ marginTop: 8, padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#111827", color: "#fff" }}
+      >
+        Opslaan
+      </button>
+      <div style={{ fontSize:12, color:'#6b7280', marginTop:8 }}>{presetMsg}</div>
+    </div>
+
+    <div>
+      <label style={label}>Beschikbare presets {loadingPresets ? "(laden…)" : ""}</label>
+      <select
+        style={input}
+        value={selectedPresetId}
+        onChange={(e) => setSelectedPresetId(e.target.value)}
+      >
+        <option value="">— kies preset —</option>
+        {presets.map((p) => (
+          <option key={p.id ?? p.name} value={p.id ?? p.name}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+        <button
+          onClick={handleApplyPreset}
+          disabled={!selectedPresetId}
+          style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#2563eb", color: "#fff" }}
+        >
+          Toepassen
+        </button>
+        <button
+          onClick={handleDeletePreset}
+          disabled={!selectedPresetId}
+          style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff" }}
+        >
+          Verwijderen
+        </button>
+        <button
+          onClick={refreshPresets}
+          style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff" }}
+        >
+          Vernieuwen
+        </button>
+        <button
+  onClick={async () => {
+    if (!supabase) { setPresetMsg("Supabase niet geconfigureerd"); return; }
+    setPresetMsg("Test insert…");
+    const { error } = await supabase
+      .from("classifier_presets")
+      .insert({ name: "smoke", data: { hello: "world" } });
+    setPresetMsg(error ? `Error: ${error.message}` : "Test insert OK ✔");
+  }}
+  style={{ padding:'8px 12px', borderRadius:10, border:'1px solid #e5e7eb', background:'#fff' }}
+>
+  Test insert
+</button>
+      </div>
+
+      <div style={small}>
+        Opslag: {supabase ? "Supabase" : "Browser (localStorage)"}
+      </div>
+    </div>
+  </div>
+</div>
+{/* --- EINDE PRESETS CARD --- */}
 
       {/* Layout */}
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}>
