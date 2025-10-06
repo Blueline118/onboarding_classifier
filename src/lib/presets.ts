@@ -17,7 +17,10 @@ export async function loadPresets(): Promise<PresetRecord[]> {
     .select("id,name,data,created_at")
     .order("created_at", { ascending: false });
   if (error) { console.error("[presets] load", error); return []; }
-  return (data ?? []) as any;
+
+  // alleen presets met volledige payload
+  const rows = (data ?? []) as any[];
+  return rows.filter(r => r?.data?.inputs && r?.data?.gw && r?.data?.vw && r?.data?.th) as any;
 }
 
 export async function savePreset(name: string, payload: PresetPayload) {

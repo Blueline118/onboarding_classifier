@@ -191,6 +191,16 @@ const defaultThresholds = (): Thresholds => ({
   C1: 100,
 });
 
+const SC_B_KEY = "onb_scenario_b";
+const readScenarioB = () => {
+  try { const raw = sessionStorage.getItem(SC_B_KEY); return raw ? JSON.parse(raw) : null; }
+  catch { return null; }
+};
+const writeScenarioB = (payload: any) => {
+  try { sessionStorage.setItem(SC_B_KEY, JSON.stringify(payload)); } catch {}
+};
+const clearScenarioB = () => { try { sessionStorage.removeItem(SC_B_KEY); } catch {} };
+
 // ---------- Helpers: normalization mappings (0..100) ----------
 // We keep mappings simple and documented for transparency.
 
@@ -365,6 +375,7 @@ async function refreshPresets() {
   const list = await loadPresets();
   setPresets(list);
   setLoadingPresets(false);
+  setPresetMsg(`Verversd: ${list.length} presets`);
 }
 
 useEffect(() => { refreshPresets(); }, []);
@@ -385,28 +396,39 @@ async function handleSavePreset() {
 
 async function handleApplyPreset() {
   const rec = presets.find(p => (p.id ?? p.name) === selectedPresetId);
-  if (!rec) return;
-  const data = rec.data;
-  setInputs(data.inputs);
-  setGw(data.gw);
-  setVw(data.vw);
-  setTh(data.th);
+  if (!rec) { setPresetMsg("Kies een preset"); return; }
+
+  const d: any = rec.data || {};
+  if (!d.inputs || !d.gw || !d.vw || !d.th) {
+    setPresetMsg("Preset is ongeldig (test/smoke) — niet toegepast");
+    return;
+  }
+  try {
+    setInputs(d.inputs); setGw(d.gw); setVw(d.vw); setTh(d.th);
+    setPresetMsg(`Toegepast: ${rec.name}`);
+  } catch (e) {
+    console.error(e);
+    setPresetMsg("Fout bij toepassen — zie Console");
+  }
 }
+
 async function handleDeletePreset() {
-  if (!selectedPresetId) return;
-  await deletePreset(selectedPresetId);
-  setSelectedPresetId("");
-  await refreshPresets();
+  if (!selectedPresetId) { setPresetMsg("Geen preset gekozen"); return; }
+  setPresetMsg("Verwijderen…");
+  try {
+    await deletePreset(selectedPresetId);
+    setSelectedPresetId("");
+    await refreshPresets();
+    setPresetMsg("Verwijderd ✔");
+  } catch (e) {
+    console.error(e);
+    setPresetMsg("Fout bij verwijderen — zie Console");
+  }
 }
 
 // Scenario compare (A/B) in localStorage
   const [scenarioName, setScenarioName] = useState("Scenario A");
-  const [otherScenario, setOtherScenario] = useState<any | null>(null);
-
-  useEffect(() => {
-    const saved = localStorage.getItem("onbClassifierScenarioB");
-    if (saved) setOtherScenario(JSON.parse(saved));
-  }, []);
+  const [otherScenario, setOtherScenario] = useState<any | null>(() => readScenarioB());
 
   const groupSum = Object.values(gw).reduce((a, b) => a + b, 0);
   const groupWarning = Math.abs(1 - groupSum) > 0.0001;
@@ -445,11 +467,12 @@ async function handleDeletePreset() {
     setInputs(prev => ({ ...prev, [key]: { ...(prev as any)[key], [sub]: val } as any }));
   };
 
-  const saveScenarioB = () => {
-    const payload = { inputs, gw, vw, th, label: "Scenario B" };
-    localStorage.setItem("onbClassifierScenarioB", JSON.stringify(payload));
-    setOtherScenario(payload);
-  };
+  function saveScenarioB() {
+  const payload = { name: scenarioName, inputs, gw, vw, th };
+  writeScenarioB(payload);
+  setOtherScenario(payload);
+  setPresetMsg("Scenario B bewaard (sessie)");
+}
 
   const exportCsv = () => {
     const row: Record<string, any> = { totalScore: totalScore.toFixed(1), class: classification.code, lead: classification.lead };
