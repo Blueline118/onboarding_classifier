@@ -416,13 +416,13 @@ async function handleDeletePreset() {
   if (!selectedPresetId) { setPresetMsg("Geen preset gekozen"); return; }
   setPresetMsg("Verwijderen…");
   try {
-    await deletePreset(selectedPresetId);
+    const res = await deletePreset(selectedPresetId);
     setSelectedPresetId("");
     await refreshPresets();
-    setPresetMsg("Verwijderd ✔");
-  } catch (e) {
+    setPresetMsg(res.count ? `Verwijderd ✔ (${res.count})` : "Niets verwijderd");
+  } catch (e: any) {
     console.error(e);
-    setPresetMsg("Fout bij verwijderen — zie Console");
+    setPresetMsg(`Fout bij verwijderen — ${e?.message ?? "zie Console"}`);
   }
 }
 

@@ -38,12 +38,25 @@ export async function savePreset(name: string, payload: PresetPayload) {
 export async function deletePreset(idOrName: string) {
   if (!supabase) {
     const list = await loadPresets();
-    localStorage.setItem(LS_KEY, JSON.stringify(list.filter(p => (p.id ?? p.name) !== idOrName)));
-    return;
+    const next = list.filter(p => (p.id ?? p.name) !== idOrName);
+    localStorage.setItem(LS_KEY, JSON.stringify(next));
+    return { ok: true, count: list.length - next.length };
   }
-  const { error } = await supabase
-    .from("classifier_presets")
-    .delete()
-    .or(`id.eq.${idOrName},name.eq.${idOrName}`);
+
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(idOrName);
+  let res;
+  if (isUUID) {
+    res = await supabase
+      .from("classifier_presets")
+      .delete()
+      .eq("id", idOrName);
+  } else {
+    res = await supabase
+      .from("classifier_presets")
+      .delete()
+      .eq("name", idOrName);
+  }
+  const { error, count } = res;
   if (error) { console.error("[presets] delete", error); throw error; }
+  return { ok: true, count: count ?? 0 };
 }
