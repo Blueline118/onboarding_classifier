@@ -492,12 +492,15 @@ async function handleDeletePreset() {
     URL.revokeObjectURL(url);
   };
 
-  const resetAll = () => {
-    setInputs(defaultInputs());
-    setGw(defaultGroupWeights());
-    setVw(defaultVarWeights());
-    setTh(defaultThresholds());
-  };
+  function resetAll() {
+  setInputs(defaultInputs());
+  setGw(defaultGroupWeights());
+  setVw(defaultVarWeights());
+  setTh(defaultThresholds());
+  try { sessionStorage.removeItem("onb_scenario_b"); } catch {}
+  setOtherScenario(null);
+  setPresetMsg("Alles gereset (A + B)");
+}
 
   // ---------- Render ----------
   return (
@@ -507,7 +510,13 @@ async function handleDeletePreset() {
         <div style={{ display: "flex", gap: 8 }}>
           <button onClick={exportCsv} style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#111827", color: "#fff" }}>Export CSV</button>
           <button onClick={saveScenarioB} style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#2563eb", color: "#fff" }}>Bewaar Scenario B</button>
-          <button onClick={resetAll} style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff" }}>Reset</button>
+          <button
+  onClick={resetAll}
+  style={{ padding: "8px 12px", borderRadius: 10, border: "1px solid #e5e7eb", background: "#fff" }}
+>
+  Reset
+</button>
+
         </div>
       </div>
 
@@ -568,21 +577,7 @@ async function handleDeletePreset() {
         >
           Vernieuwen
         </button>
-        <button
-  onClick={async () => {
-    if (!supabase) { setPresetMsg("Supabase niet geconfigureerd"); return; }
-    setPresetMsg("Test insert…");
-    const { error } = await supabase
-      .from("classifier_presets")
-      .insert({ name: "smoke", data: { hello: "world" } });
-    setPresetMsg(error ? `Error: ${error.message}` : "Test insert OK ✔");
-  }}
-  style={{ padding:'8px 12px', borderRadius:10, border:'1px solid #e5e7eb', background:'#fff' }}
->
-  Test insert
-</button>
-      </div>
-
+              </div>
       <div style={small}>
         Opslag: {supabase ? "Supabase" : "Browser (localStorage)"}
       </div>
