@@ -1,5 +1,30 @@
+export type MultiOptions = Record<string, boolean>;
+
 export interface ClassifierInput {
-  // TODO: Define classifier input shape
+  skuCount: number;
+  orderVolume: number;
+  orderPeak: number;
+  retourPercentage: number;
+  aantalAfdelingen: number;
+  skuComplexity: string;
+  seizoensinvloed: string;
+  platformType: string;
+  typeKoppeling: string;
+  configDoor: string;
+  mateMaatwerk: string;
+  mappingComplexiteit: string;
+  testCapaciteit: string;
+  voorraadBeheer: string;
+  replenishment: string;
+  verzendMethoden: string;
+  retourProces: string;
+  dashboardGebruik: string;
+  rapportageBehoefte: string;
+  serviceUitbreiding: string;
+  scopeWijzigingen: string;
+  vasActiviteiten: MultiOptions;
+  inboundBijzonderheden: MultiOptions;
+  postnlApis: MultiOptions;
 }
 
 export interface ScoreBreakdown {
