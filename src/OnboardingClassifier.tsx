@@ -19,6 +19,7 @@ Features
 - Reset to defaults
 */
 
+
 import React, { useEffect, useMemo, useState } from "react";
 import { HeaderBar, InputsForm, ResultPanel } from "@/features/classifier";
 import type { ClassifierInput, ClassifierResult } from "@/features/classifier";
@@ -381,12 +382,13 @@ const label: React.CSSProperties = {
   marginBottom: 6,
   display: "block",
 };
-const input: React.CSSProperties = {
+const inputStyle: React.CSSProperties = {
   width: "100%",
   padding: "8px 10px",
   borderRadius: 10,
   border: "1px solid #e5e7eb",
 };
+
 const grid2: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr",
@@ -989,164 +991,155 @@ export default function OnboardingClassifier() {
       />
       {/* --- EINDE PRESETS CARD --- */}
 
-      {/* Layout */}
-      <div
-        style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}
-      >
-        {/* Left: Inputs */}
-        <div>
-          <InputsForm value={inputs} onChange={handleInputChange} />
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Group weights</h2>
-            <div style={grid3}>
-              {(Object.keys(gw) as (keyof GroupWeights)[]).map((key) => (
-                <div key={key}>
-                  <label style={label}>
-                    {key} ({(gw[key] * 100).toFixed(0)}%)
-                  </label>
-                  <input
-                    style={input}
-                    type="number"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={gw[key]}
-                    onChange={(e) =>
-                      setGw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-            {groupWarning && (
-              <div style={{ color: "#ef4444", marginTop: 8 }}>
-                Waarschuwing: som ≠ 1.0 (nu {groupSum.toFixed(2)})
-              </div>
-            )}
-          </div>
+{/* Layout */}
+<div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}>
+  {/* Left: Inputs */}
+  <div>
+    <InputsForm value={inputs} onChange={handleInputChange} />
 
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Variable weights</h2>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-              {(Object.keys(vw) as (keyof VarWeights)[]).map((key) => (
-                <div key={key} style={{ width: 140 }}>
-                  <label style={label}>
-                    {key} ({(vw[key] * 100).toFixed(0)}%)
-                  </label>
-                  <input
-                    style={input}
-                    type="number"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={vw[key]}
-                    onChange={(e) =>
-                      setVw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-                    }
-                  />
-                </div>
-              ))}
-            </div>
+    <div style={{ ...card, ...section }}>
+      <h2 style={h2}>Group weights</h2>
+      <div style={grid3}>
+        {(Object.keys(gw) as (keyof GroupWeights)[]).map((key) => (
+          <div key={key}>
+            <label style={label}>
+              {key} ({(gw[key] * 100).toFixed(0)}%)
+            </label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              max={1}
+              step={0.01}
+              value={gw[key]}
+              onChange={(e) =>
+                setGw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
+              }
+            />
           </div>
-
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Thresholds</h2>
-            <div style={grid3}>
-              {(Object.keys(th) as (keyof Thresholds)[]).map((key) => (
-                <div key={key}>
-                  <label style={label}>{key}</label>
-                  <input
-                    style={input}
-                    type="number"
-                    min={0}
-                    max={100}
-                    value={th[key]}
-                    onChange={(e) =>
-                      setTh((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-                    }
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
+        ))}
+      </div>
+      {groupWarning && (
+        <div style={{ color: "#ef4444", marginTop: 8 }}>
+          Waarschuwing: som ≠ 1.0 (nu {groupSum.toFixed(2)})
         </div>
+      )}
+    </div>
 
-        {/* Right: Results */}
-        <div>
-          <ResultPanel result={result} isBusy={isBusy} />
-
-          {/* Scenario compare */}
-          <div style={{ ...card }}>
-            <h2 style={h2}>Scenario-vergelijking</h2>
-            <div style={{ ...small, marginBottom: 8 }}>
-              Bewaar de huidige invoer als Scenario B en vergelijk.
-            </div>
-            <div style={grid2}>
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                  {scenarioName}
-                </div>
-                <div style={{ marginBottom: 4 }}>
-                  Score: {totalScore.toFixed(1)}
-                </div>
-                <div>
-                  Class: {classification.code} • {classification.lead}
-                </div>
-              </div>
-              <div>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                  {otherScenario?.label ?? "Scenario B (geen)"}
-                </div>
-                {otherScenario ? (
-                  <>
-                    <div style={{ marginBottom: 4 }}>
-                      Score:{" "}
-                      {(() => {
-                        // Recompute other scenario score quickly
-                        const scInputs = otherScenario.inputs as Inputs;
-                        const scGw = otherScenario.gw as GroupWeights;
-                        const scVw = otherScenario.vw as VarWeights;
-                        const entries: any[] = [];
-                        (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-                          const r = computeGroupScore(g, scInputs, scVw);
-                          entries.push({ key: g, score: r.groupScore });
-                        });
-                        const total = entries.reduce(
-                          (acc, e) => acc + e.score * (scGw as any)[e.key],
-                          0,
-                        );
-                        return clamp(total).toFixed(1);
-                      })()}
-                    </div>
-                    <div>
-                      Class:{" "}
-                      {(() => {
-                        const scInputs = otherScenario.inputs as Inputs;
-                        const scGw = otherScenario.gw as GroupWeights;
-                        const scVw = otherScenario.vw as VarWeights;
-                        const scTh = otherScenario.th as Thresholds;
-                        const entries: any[] = [];
-                        (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-                          const r = computeGroupScore(g, scInputs, scVw);
-                          entries.push({ key: g, score: r.groupScore });
-                        });
-                        const total = entries.reduce(
-                          (acc, e) => acc + e.score * (scGw as any)[e.key],
-                          0,
-                        );
-                        const cls = classify(total, scTh);
-                        return `${cls.code} • ${cls.lead}`;
-                      })()}
-                    </div>
-                  </>
-                ) : (
-                  <div style={small}>Nog geen Scenario B opgeslagen.</div>
-                )}
-              </div>
-            </div>
+    <div style={{ ...card, ...section }}>
+      <h2 style={h2}>Variable weights</h2>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+        {(Object.keys(vw) as (keyof VarWeights)[]).map((key) => (
+          <div key={key} style={{ width: 140 }}>
+            <label style={label}>
+              {key} ({(vw[key] * 100).toFixed(0)}%)
+            </label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              max={1}
+              step={0.01}
+              value={vw[key]}
+              onChange={(e) =>
+                setVw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
+              }
+            />
           </div>
+        ))}
+      </div>
+    </div>
+
+    <div style={{ ...card, ...section }}>
+      <h2 style={h2}>Thresholds</h2>
+      <div style={grid3}>
+        {(Object.keys(th) as (keyof Thresholds)[]).map((key) => (
+          <div key={key}>
+            <label style={label}>{key}</label>
+            <input
+              style={inputStyle}
+              type="number"
+              min={0}
+              max={100}
+              value={th[key]}
+              onChange={(e) =>
+                setTh((prev) => ({ ...prev, [key]: Number(e.target.value) }))
+              }
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  </div>
+
+  {/* Right: wrapper (alles rechts hoort in één kolom) */}
+  <div>
+    <ResultPanel result={result} isBusy={isBusy} />
+
+    {/* Scenario compare */}
+    <div style={{ ...card }}>
+      <h2 style={h2}>Scenario-vergelijking</h2>
+      <div style={{ ...small, marginBottom: 8 }}>
+        Bewaar de huidige invoer als Scenario B en vergelijk.
+      </div>
+      <div style={grid2}>
+        <div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>{scenarioName}</div>
+          <div style={{ marginBottom: 4 }}>Score: {totalScore.toFixed(1)}</div>
+          <div>Class: {classification.code} • {classification.lead}</div>
+        </div>
+        <div>
+          <div style={{ fontWeight: 700, marginBottom: 6 }}>
+            {otherScenario?.label ?? "Scenario B (geen)"}
+          </div>
+          {otherScenario ? (
+            <>
+              <div style={{ marginBottom: 4 }}>
+                Score: {(() => {
+                  const scInputs = otherScenario.inputs as Inputs;
+                  const scGw = otherScenario.gw as GroupWeights;
+                  const scVw = otherScenario.vw as VarWeights;
+                  const entries: any[] = [];
+                  (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
+                    const r = computeGroupScore(g, scInputs, scVw);
+                    entries.push({ key: g, score: r.groupScore });
+                  });
+                  const total = entries.reduce(
+                    (acc, e) => acc + e.score * (scGw as any)[e.key],
+                    0
+                  );
+                  return clamp(total).toFixed(1);
+                })()}
+              </div>
+              <div>
+                Class: {(() => {
+                  const scInputs = otherScenario.inputs as Inputs;
+                  const scGw = otherScenario.gw as GroupWeights;
+                  const scVw = otherScenario.vw as VarWeights;
+                  const scTh = otherScenario.th as Thresholds;
+                  const entries: any[] = [];
+                  (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
+                    const r = computeGroupScore(g, scInputs, scVw);
+                    entries.push({ key: g, score: r.groupScore });
+                  });
+                  const total = entries.reduce(
+                    (acc, e) => acc + e.score * (scGw as any)[e.key],
+                    0
+                  );
+                  const cls = classify(total, scTh);
+                  return `${cls.code} • ${cls.lead}`;
+                })()}
+              </div>
+            </>
+          ) : (
+            <div style={small}>Nog geen Scenario B opgeslagen.</div>
+          )}
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
 
       <div
         style={{
