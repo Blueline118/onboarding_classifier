@@ -1,4 +1,4 @@
-/* 
+/*
 OnboardingClassifier v1.0.0 — Single-file React + TypeScript component
 Usage (CodeSandbox React + TypeScript template):
   1) Create file: OnboardingClassifier.tsx and paste this entire content.
@@ -20,6 +20,7 @@ Features
 */
 
 import React, { useEffect, useMemo, useState } from "react";
+import { HeaderBar } from "@/features/classifier";
 import type { PdfSection } from "./lib/exportPdf";
 import {
   loadPresets,
@@ -30,7 +31,8 @@ import {
   type PresetPayload,
 } from "./lib/presets";
 import { useToaster } from "./components/ui/Toaster";
-import { btnDanger, btnPrimary, btnSecondary } from "./ui/buttons";
+import { btnPrimary, btnSecondary } from "./ui/buttons";
+import PresetsCard from "./features/classifier/components/PresetsCard";
 
 // ---------- Types ----------
 
@@ -158,7 +160,9 @@ const defaultInputs = (): Inputs => ({
   scopeWijzigingen: "gemiddeld",
   vasActiviteiten: { stickeren: true, bundelen: false, inspectie: false },
   inboundBijzonderheden: {
-    kwaliteitscontrole: true,
+
+
+        kwaliteitscontrole: true,
     "afwijkende verpakking": false,
     barcodering: true,
   },
@@ -422,11 +426,6 @@ const grid2: React.CSSProperties = {
 const grid3: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr 1fr",
-  gap: 16,
-};
-const gridPresets: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
   gap: 16,
 };
 const h2: React.CSSProperties = {
@@ -1000,111 +999,23 @@ export default function OnboardingClassifier() {
           </button>
         </div>
       </div>
-
-      {/* --- PRESETS CARD --- */}
-      <div data-id="presets-card" style={{ ...card, ...section }}>
-        <h2 style={h2}>Presets</h2>
-        <div style={gridPresets}>
-          <div>
-            <label style={label}>Naam</label>
-            <input
-              style={input}
-              placeholder="Bijv. Klant X – Q4"
-              value={presetName}
-              onChange={(e) => setPresetName(e.target.value)}
-            />
-            <button
-              onClick={handleSavePreset}
-              disabled={!canSaveNewPreset || isSavingPreset}
-              aria-busy={isSavingPreset}
-              style={{
-                                ...btnPrimary,
-                marginTop: 8,
-                background: !canSaveNewPreset ? "#9ca3af" : "#111827",
-                cursor:
-                  !canSaveNewPreset || isSavingPreset ? "not-allowed" : "pointer",
-                opacity: isSavingPreset ? 0.85 : 1,
-              }}
-            >
-              {isSavingPreset ? "Bezig..." : "Opslaan"}
-            </button>
-          </div>
-
-          <div>
-            <label style={label}>
-                Gekozen preset {loadingPresets ? "(laden…)" : ""}
-            </label>
-            <select
-              style={input}
-              value={selectedPresetId}
-              onChange={(e) => handleSelectPreset(e.target.value)}
-            >
-              <option value="">— kies preset —</option>
-              {presets.map((p) => (
-                <option key={p.id ?? p.name} value={p.id ?? p.name}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-
-            <div
-              style={{
-                display: "flex",
-                gap: 8,
-                marginTop: 8,
-                alignItems: "center",
-                justifyContent: "space-between",
-              }}
-            >
-              <div style={{ display: "flex", gap: 8 }}>
-                <button
-                  onClick={handleApplyPreset}
-                  disabled={!selectedPresetId}
-                  style={{
-                    ...btnPrimary,
-                    background: "#2563eb",
-                    cursor: !selectedPresetId ? "not-allowed" : "pointer",
-                  }}
-                >
-                  Toepassen
-                </button>
-                <button
-                  onClick={handleDeletePreset}
-                  disabled={!selectedPresetId}
-                  style={{
-                    ...btnDanger,
-                    cursor: !selectedPresetId ? "not-allowed" : "pointer",
-                  }}
-                >
-                  Verwijderen
-                </button>
-                <button
-                  onClick={() => refreshPresets(true)}
-                  style={{
-                    ...btnSecondary,
-                  }}
-                >
-                  Vernieuwen
-                </button>
-              </div>
-              {isDirty && (
-                <button
-                  onClick={handleSaveChanges}
-                                    disabled={isSavingChanges}
-                  aria-busy={isSavingChanges}
-                  style={{
-                    ...btnPrimary,
-                    cursor: isSavingChanges ? "wait" : "pointer",
-                    opacity: isSavingChanges ? 0.85 : 1,
-                  }}
-                >
-                  {isSavingChanges ? "Bezig..." : "Wijzigingen opslaan"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+      <PresetsCard
+        presets={presets}
+        selectedPresetId={selectedPresetId || null}
+        onSelectPreset={handleSelectPreset}
+        name={presetName}
+        onNameChange={(value) => setPresetName(value)}
+        onSave={handleSavePreset}
+        canSave={canSaveNewPreset}
+        isSavingPreset={isSavingPreset}
+        loadingPresets={loadingPresets}
+        onApply={handleApplyPreset}
+        onDelete={handleDeletePreset}
+        onRefresh={() => refreshPresets(true)}
+        isDirty={isDirty}
+        onSaveChanges={handleSaveChanges}
+        isSavingChanges={isSavingChanges}
+      />
       {/* --- EINDE PRESETS CARD --- */}
 
       {/* Layout */}
