@@ -30,6 +30,8 @@ import {
   type PresetRecord,
   type PresetPayload,
 } from "./lib/presets";
+import { useToaster } from "./components/ui/Toaster";
+import { btnDanger, btnPrimary, btnSecondary } from "./ui/buttons";
 
 // ---------- Types ----------
 
@@ -465,13 +467,19 @@ export default function OnboardingClassifier() {
   const [vw, setVw] = useState<VarWeights>(defaultVarWeights());
   const [th, setTh] = useState<Thresholds>(defaultThresholds());
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [presetMsg, setPresetMsg] = useState("");
-
+  
   // Presets
   const [presets, setPresets] = useState<PresetRecord[]>([]);
   const [presetName, setPresetName] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
   const [loadingPresets, setLoadingPresets] = useState(false);
+    const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [isSavingChanges, setIsSavingChanges] = useState(false);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
+  const [isExportingCsv, setIsExportingCsv] = useState(false);
+
+  const toaster = useToaster();
+
 
   // === PRESET HELPERS — SINGLE SOURCE OF TRUTH ===
   const [lastApplied, setLastApplied] = useState<PresetPayload | null>(null);
@@ -501,22 +509,24 @@ export default function OnboardingClassifier() {
   }
 
   async function handleSavePreset() {
+        if (isSavingPreset) return;
     if (selectedPresetId) {
-      setPresetMsg("Preset actief — gebruik ‘Wijzigingen opslaan’.");
+      toaster.show("Preset actief — gebruik ‘Wijzigingen opslaan’.", "info");
       return;
     }
     const raw = (presetName ?? "").trim();
     if (raw.length < 3) {
-      setPresetMsg("Naam te kort (minimaal 3 tekens)");
+      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
     const finalName = uniqueizeName(raw);
     const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
 
-    setPresetMsg("Opslaan…");
+    setIsSavingPreset(true);
+    toaster.show("Opslaan…", "info");
     try {
       await savePreset(finalName, payload);
-      const list = await refreshPresets();
+       const list = await refreshPresets(false);
       const created = list.find((p) => p.name === finalName);
       if (created) {
         const identifier = created.id ?? created.name;
@@ -525,63 +535,90 @@ export default function OnboardingClassifier() {
         setLastApplied(created.data as PresetPayload);
       }
       setPresetName(finalName);
-      setPresetMsg(`Preset opgeslagen ✔ (${finalName})`);
+      toaster.show(`Preset opgeslagen ✔ (${finalName})`, "success");
     } catch (e: any) {
       console.error(e);
-      setPresetMsg(`Fout bij opslaan — ${e?.message ?? "zie Console"}`);
+      toaster.show(
+        `Fout bij opslaan — ${e?.message ?? "zie Console"}`,
+        "error",
+      );
+    } finally {
+      setIsSavingPreset(false);
     }
   }
 
   async function handleSaveChanges() {
+        if (isSavingChanges) return;
     if (!selectedPresetId) {
-      setPresetMsg("Geen preset gekozen");
+      toaster.show("Geen preset gekozen", "error");
       return;
     }
 
     const current = presets.find((p) => (p.id ?? p.name) === selectedPresetId);
     const typed = (presetName ?? "").trim();
     if (typed && typed.length < 3) {
-      setPresetMsg("Naam te kort (minimaal 3 tekens)");
+      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
 
     const target = typed ? typed : current?.name || "";
     if (target.length < 3) {
-      setPresetMsg("Naam te kort (minimaal 3 tekens)");
+      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
 
     const finalName = uniqueizeName(target, selectedPresetId);
     const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
 
-    setPresetMsg("Wijzigingen opslaan…");
+     setIsSavingChanges(true);
+    toaster.show("Wijzigingen opslaan…", "info");
     try {
       await updatePreset(selectedPresetId, finalName, payload);
-      await refreshPresets();
+      await refreshPresets(false);
       setPresetName(finalName);
       setCurrentSelectedName(finalName);
       setLastApplied(payload); // dirty -> false
-      setPresetMsg(`Wijzigingen opgeslagen ✔ (${finalName})`);
+      toaster.show(`Wijzigingen opgeslagen ✔ (${finalName})`, "success");
     } catch (e: any) {
       console.error(e);
-      setPresetMsg(`Fout bij wijzigen — ${e?.message ?? "zie Console"}`);
+      toaster.show(
+        `Fout bij wijzigen — ${e?.message ?? "zie Console"}`,
+        "error",
+      );
+    } finally {
+      setIsSavingChanges(false);
     }
   }
   // === END HELPERS ===
 
-  async function refreshPresets() {
+  async function refreshPresets(announce = true) {
     setLoadingPresets(true);
-    const list = await loadPresets();
-    setPresets(list);
-    setLoadingPresets(false);
-    const current = selectedPresetId
-      ? list.find((p) => (p.id ?? p.name) === selectedPresetId)
-      : null;
-    if (current) {
-      setCurrentSelectedName(current.name);
+    try {
+      const list = await loadPresets();
+      setPresets(list);
+      const current = selectedPresetId
+        ? list.find((p) => (p.id ?? p.name) === selectedPresetId)
+        : null;
+      if (current) {
+        setCurrentSelectedName(current.name);
+      }
+      if (announce) {
+        toaster.show(`Verversd: ${list.length} presets`, "info");
+      }
+      return list;
+    } catch (e: any) {
+      console.error(e);
+      if (announce) {
+        toaster.show(
+          `Fout bij laden presets — ${e?.message ?? "zie Console"}`,
+          "error",
+        );
+      }
+      setPresets([]);
+      return [];
+    } finally {
+      setLoadingPresets(false);
     }
-    setPresetMsg(`Verversd: ${list.length} presets`);
-    return list;
   }
 
   useEffect(() => {
@@ -591,13 +628,16 @@ export default function OnboardingClassifier() {
   async function handleApplyPreset() {
     const rec = presets.find((p) => (p.id ?? p.name) === selectedPresetId);
     if (!rec) {
-      setPresetMsg("Kies een preset");
+      toaster.show("Kies een preset", "error");
       return;
     }
 
     const d: any = rec.data || {};
     if (!d.inputs || !d.gw || !d.vw || !d.th) {
-      setPresetMsg("Preset is ongeldig (test/smoke) — niet toegepast");
+      toaster.show(
+        "Preset is ongeldig (test/smoke) — niet toegepast",
+        "error",
+      );
       return;
     }
     try {
@@ -609,32 +649,36 @@ export default function OnboardingClassifier() {
       setLastApplied(data);
       setCurrentSelectedName(rec.name);
       setPresetName(rec.name);
-      setPresetMsg(`Toegepast: ${rec.name}`);
+      toaster.show(`Toegepast: ${rec.name}`, "success");
     } catch (e) {
       console.error(e);
-      setPresetMsg("Fout bij toepassen — zie Console");
+      toaster.show("Fout bij toepassen — zie Console", "error");
     }
   }
 
   async function handleDeletePreset() {
     if (!selectedPresetId) {
-      setPresetMsg("Geen preset gekozen");
+      toaster.show("Geen preset gekozen", "error");
       return;
     }
-    setPresetMsg("Verwijderen…");
+    toaster.show("Verwijderen…", "info");
     try {
       const res = await deletePreset(selectedPresetId);
       setSelectedPresetId("");
       setPresetName("");
       setCurrentSelectedName("");
       setLastApplied(null);
-      await refreshPresets();
-      setPresetMsg(
+      await refreshPresets(false);
+      toaster.show(
         res.count ? `Verwijderd ✔ (${res.count})` : "Niets verwijderd",
+                res.count ? "success" : "info",
       );
     } catch (e: any) {
       console.error(e);
-      setPresetMsg(`Fout bij verwijderen — ${e?.message ?? "zie Console"}`);
+      toaster.show(
+        `Fout bij verwijderen — ${e?.message ?? "zie Console"}`,
+        "error",
+      );
     }
   }
 
@@ -713,34 +757,112 @@ export default function OnboardingClassifier() {
     const payload = { name: scenarioName, inputs, gw, vw, th };
     writeScenarioB(payload);
     setOtherScenario(payload);
-    setPresetMsg("Scenario B bewaard (sessie)");
+    toaster.show("Scenario B bewaard (sessie)", "success");
   }
 
-  const exportCsv = () => {
-    const row: Record<string, any> = {
-      totalScore: totalScore.toFixed(1),
-      class: classification.code,
-      lead: classification.lead,
-    };
-    Object.entries(inputs).forEach(([k, v]) => {
-      if (typeof v === "object" && v !== null) {
-        row[k] = Object.entries(v as any)
-          .filter(([, on]) => !!on)
-          .map(([name]) => name)
-          .join("; ");
-      } else {
-        row[k] = v as any;
+  const handleExportPdf = async () => {
+    if (isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      const classificationCode =
+        typeof classification === "string"
+          ? classification
+          : classification?.code ?? "n.v.t.";
+      const toRow = (label: string, v: unknown): [string, string] => [
+        label,
+        String(v ?? ""),
+      ];
+      const selectedList = (options: MultiOptions) => {
+        const active = Object.entries(options)
+          .filter(([, isActive]) => isActive)
+          .map(([key]) => key);
+        return active.length ? active.join(", ") : "Geen";
+      };
+      const sections: PdfSection[] = [
+        {
+          title: "Operationele kenmerken",
+          rows: [
+            toRow("Aantal SKU's", inputs.skuCount),
+            toRow("SKU-complexiteit", inputs.skuComplexity),
+            toRow("Ordervolume/mnd (gem.)", inputs.orderVolume),
+            toRow("Piekvolume", inputs.orderPeak),
+            toRow("Seizoensinvloeden", inputs.seizoensinvloed),
+            toRow("Retourpercentage", `${inputs.retourPercentage}%`),
+            toRow("VAS-activiteiten", selectedList(inputs.vasActiviteiten)),
+            toRow(
+              "Inbound bijzonderheden",
+              selectedList(inputs.inboundBijzonderheden),
+            ),
+          ],
+        },
+        {
+          title: "Technische integratie",
+          rows: [
+            toRow("Platformtype", inputs.platformType),
+            toRow("Type koppeling", inputs.typeKoppeling),
+            toRow("PostNL API's", selectedList(inputs.postnlApis)),
+            toRow("Kanalen", inputs.verzendMethoden),
+          ],
+        },
+      ];
+      const { exportPdf } = await import("./lib/exportPdf");
+      exportPdf({
+        presetName: (presetName || currentSelectedName || "") as string,
+        classification: classificationCode,
+        sections,
+      });
+    } catch (e: any) {
+      console.error(e);
+      toaster.show(
+        `Fout bij PDF export — ${e?.message ?? "zie Console"}`,
+        "error",
+      );
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  const handleExportCsv = async () => {
+    if (isExportingCsv) return;
+    setIsExportingCsv(true);
+    let url: string | null = null;
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      const row: Record<string, any> = {
+        totalScore: totalScore.toFixed(1),
+        class: classification.code,
+        lead: classification.lead,
+      };
+      Object.entries(inputs).forEach(([k, v]) => {
+        if (typeof v === "object" && v !== null) {
+          row[k] = Object.entries(v as any)
+            .filter(([, on]) => !!on)
+            .map(([name]) => name)
+            .join("; ");
+        } else {
+          row[k] = v as any;
+        }
+      });
+      groupScores.forEach((gs) => (row[`group_${gs.key}`] = gs.score.toFixed(1)));
+      const csv = toCSV([row]);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "onboarding-classifier.csv";
+      a.click();
+    } catch (e: any) {
+      console.error(e);
+      toaster.show(
+        `Fout bij CSV export — ${e?.message ?? "zie Console"}`,
+        "error",
+      );
+    } finally {
+      if (url) {
+        URL.revokeObjectURL(url);
       }
-    });
-    groupScores.forEach((gs) => (row[`group_${gs.key}`] = gs.score.toFixed(1)));
-    const csv = toCSV([row]);
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "onboarding-classifier.csv";
-    a.click();
-    URL.revokeObjectURL(url);
+          setIsExportingCsv(false);
+    }
   };
 
   function resetAll() {
@@ -756,10 +878,12 @@ export default function OnboardingClassifier() {
     setPresetName("");
     setCurrentSelectedName("");
     setLastApplied(null);
-    setPresetMsg("Alles gereset (A + B)");
+    toaster.show("Alles gereset (A + B)", "info");
   }
 
   const currentPayload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
+    const trimmedPresetName = (presetName ?? "").trim();
+  const canSaveNewPreset = !selectedPresetId && trimmedPresetName.length >= 3;
   const isDirty =
     !!selectedPresetId &&
     !!lastApplied &&
@@ -800,88 +924,34 @@ export default function OnboardingClassifier() {
         </h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={async () => {
-              const classificationCode =
-                typeof classification === "string"
-                  ? classification
-                  : classification?.code ?? "n.v.t.";
-              const toRow = (label: string, v: unknown): [string, string] => [
-                label,
-                String(v ?? ""),
-              ];
-              const selectedList = (options: MultiOptions) => {
-                const active = Object.entries(options)
-                  .filter(([, isActive]) => isActive)
-                  .map(([key]) => key);
-                return active.length ? active.join(", ") : "Geen";
-              };
-              const sections: PdfSection[] = [
-                {
-                  title: "Operationele kenmerken",
-                  rows: [
-                    toRow("Aantal SKU's", inputs.skuCount),
-                    toRow("SKU-complexiteit", inputs.skuComplexity),
-                    toRow("Ordervolume/mnd (gem.)", inputs.orderVolume),
-                    toRow("Piekvolume", inputs.orderPeak),
-                    toRow("Seizoensinvloeden", inputs.seizoensinvloed),
-                    toRow("Retourpercentage", `${inputs.retourPercentage}%`),
-                    toRow(
-                      "VAS-activiteiten",
-                      selectedList(inputs.vasActiviteiten),
-                    ),
-                    toRow(
-                      "Inbound bijzonderheden",
-                      selectedList(inputs.inboundBijzonderheden),
-                    ),
-                  ],
-                },
-                {
-                  title: "Technische integratie",
-                  rows: [
-                    toRow("Platformtype", inputs.platformType),
-                    toRow("Type koppeling", inputs.typeKoppeling),
-                    toRow("PostNL API's", selectedList(inputs.postnlApis)),
-                    toRow("Kanalen", inputs.verzendMethoden),
-                  ],
-                },
-              ];
-                            const { exportPdf } = await import("./lib/exportPdf");
-              exportPdf({
-                presetName: (presetName || currentSelectedName || "") as string,
-                classification: classificationCode,
-                sections,
-              });
-            }}
+               onClick={handleExportPdf}
+            disabled={isExportingPdf}
+            aria-busy={isExportingPdf}
             style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: "1px solid #e5e7eb",
-              background: "#111827",
-              color: "#fff",
+                            ...btnPrimary,
+              cursor: isExportingPdf ? "wait" : "pointer",
+              opacity: isExportingPdf ? 0.85 : 1,
             }}
           >
-            Export PDF
+            {isExportingPdf ? "Bezig..." : "Export PDF"}
           </button>
           <button
-            onClick={exportCsv}
+            onClick={handleExportCsv}
+            disabled={isExportingCsv}
+            aria-busy={isExportingCsv}
             style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: "1px solid #e5e7eb",
-              background: "#111827",
-              color: "#fff",
+              ...btnPrimary,
+              cursor: isExportingCsv ? "wait" : "pointer",
+              opacity: isExportingCsv ? 0.85 : 1,
             }}
           >
-            Export CSV
+            {isExportingCsv ? "Bezig..." : "Export CSV"}
           </button>
           <button
             onClick={saveScenarioB}
             style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: "1px solid #e5e7eb",
+              ...btnPrimary,
               background: "#2563eb",
-              color: "#fff",
             }}
           >
             Bewaar Scenario B
@@ -889,10 +959,7 @@ export default function OnboardingClassifier() {
           <button
             onClick={resetAll}
             style={{
-              padding: "8px 12px",
-              borderRadius: 10,
-              border: "1px solid #e5e7eb",
-              background: "#fff",
+              ...btnSecondary,
             }}
           >
             Reset
@@ -914,26 +981,19 @@ export default function OnboardingClassifier() {
             />
             <button
               onClick={handleSavePreset}
-              disabled={
-                !!selectedPresetId || (presetName?.trim().length ?? 0) < 3
-              }
+              disabled={!canSaveNewPreset || isSavingPreset}
+              aria-busy={isSavingPreset}
               style={{
+                                ...btnPrimary,
                 marginTop: 8,
-                padding: "8px 12px",
-                borderRadius: 10,
-                border: "1px solid #e5e7eb",
-                background:
-                  !!selectedPresetId || (presetName?.trim().length ?? 0) < 3
-                    ? "#9ca3af"
-                    : "#111827",
-                color: "#fff",
+                background: !canSaveNewPreset ? "#9ca3af" : "#111827",
+                cursor:
+                  !canSaveNewPreset || isSavingPreset ? "not-allowed" : "pointer",
+                opacity: isSavingPreset ? 0.85 : 1,
               }}
             >
-              Opslaan
+              {isSavingPreset ? "Bezig..." : "Opslaan"}
             </button>
-            <div style={{ fontSize: 12, color: "#6b7280", marginTop: 8 }}>
-              {presetMsg}
-            </div>
           </div>
 
           <div>
@@ -967,11 +1027,9 @@ export default function OnboardingClassifier() {
                   onClick={handleApplyPreset}
                   disabled={!selectedPresetId}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #e5e7eb",
+                    ...btnPrimary,
                     background: "#2563eb",
-                    color: "#fff",
+                    cursor: !selectedPresetId ? "not-allowed" : "pointer",
                   }}
                 >
                   Toepassen
@@ -980,21 +1038,16 @@ export default function OnboardingClassifier() {
                   onClick={handleDeletePreset}
                   disabled={!selectedPresetId}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #e5e7eb",
-                    background: "#fff",
+                    ...btnDanger,
+                    cursor: !selectedPresetId ? "not-allowed" : "pointer",
                   }}
                 >
                   Verwijderen
                 </button>
                 <button
-                  onClick={refreshPresets}
+                  onClick={() => refreshPresets(true)}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #e5e7eb",
-                    background: "#fff",
+                    ...btnSecondary,
                   }}
                 >
                   Vernieuwen
@@ -1003,15 +1056,15 @@ export default function OnboardingClassifier() {
               {isDirty && (
                 <button
                   onClick={handleSaveChanges}
+                                    disabled={isSavingChanges}
+                  aria-busy={isSavingChanges}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: 10,
-                    border: "1px solid #e5e7eb",
-                    background: "#111827",
-                    color: "#fff",
+                    ...btnPrimary,
+                    cursor: isSavingChanges ? "wait" : "pointer",
+                    opacity: isSavingChanges ? 0.85 : 1,
                   }}
                 >
-                  Wijzigingen opslaan
+                  {isSavingChanges ? "Bezig..." : "Wijzigingen opslaan"}
                 </button>
               )}
             </div>
@@ -1026,10 +1079,7 @@ export default function OnboardingClassifier() {
               <button
                 onClick={clearScenarioB}
                 style={{
-                  padding: "8px 12px",
-                  borderRadius: 10,
-                  border: "1px solid #e5e7eb",
-                  background: "#fff",
+                  ...btnSecondary,
                 }}
               >
                 Scenario B wissen
