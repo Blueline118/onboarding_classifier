@@ -789,11 +789,6 @@ function OnboardingClassifierContent() {
     }
   }, [computedResult, recalc, result]);
 
-  // Handlers
-  const handleInputChange = (patch: Partial<Inputs>) => {
-    setInput(patch);
-  };
-
   function saveScenarioB() {
     const payload = { name: scenarioName, inputs: input, gw, vw, th };
     writeScenarioB(payload);
@@ -1023,8 +1018,7 @@ function OnboardingClassifierContent() {
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}>
         {/* Left: Inputs */}
         <div>
-          <InputsForm value={input} onChange={handleInputChange} />
-
+          <InputsForm />
           <div style={{ ...card, ...section }}>
             <h2 style={h2}>Group weights</h2>
             <div style={grid3}>
