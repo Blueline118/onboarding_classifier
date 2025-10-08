@@ -20,7 +20,6 @@ Features
 */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { supabase } from "./lib/supabaseClient";
 import type { PdfSection } from "./lib/exportPdf";
 import {
   loadPresets,
@@ -64,11 +63,19 @@ type Inputs = {
   dashboardGebruik: string; // dagelijks/wekelijks/zelden
   rapportageBehoefte: string; // standaard/uitgebreid/maatwerk
   serviceUitbreiding: string; // nee/ja
+
   scopeWijzigingen: string; // weinig/gemiddeld/veel
   // Multi-select
   vasActiviteiten: MultiOptions; // stickeren/bundelen/inspectie
   inboundBijzonderheden: MultiOptions; // kwaliteitscontrole/afwijkende verpakking/barcodering
   postnlApis: MultiOptions; // Locatie/Checkout/Retour/Track & Trace
+};
+
+type PresetSnapshot = {
+  inputs: Inputs;
+  gw: GroupWeights;
+  vw: VarWeights;
+  th: Thresholds;
 };
 
 type GroupWeights = {
@@ -221,11 +228,6 @@ const readScenarioB = () => {
 const writeScenarioB = (payload: any) => {
   try {
     sessionStorage.setItem(SC_B_KEY, JSON.stringify(payload));
-  } catch {}
-};
-const clearScenarioB = () => {
-  try {
-    sessionStorage.removeItem(SC_B_KEY);
   } catch {}
 };
 
@@ -422,6 +424,11 @@ const grid3: React.CSSProperties = {
   gridTemplateColumns: "1fr 1fr 1fr",
   gap: 16,
 };
+const gridPresets: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 16,
+};
 const h2: React.CSSProperties = {
   fontSize: 18,
   fontWeight: 700,
@@ -473,18 +480,23 @@ export default function OnboardingClassifier() {
   const [presetName, setPresetName] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
   const [loadingPresets, setLoadingPresets] = useState(false);
-    const [isSavingPreset, setIsSavingPreset] = useState(false);
+  const [isSavingPreset, setIsSavingPreset] = useState(false);
   const [isSavingChanges, setIsSavingChanges] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
 
   const toaster = useToaster();
 
-
   // === PRESET HELPERS — SINGLE SOURCE OF TRUTH ===
-  const [lastApplied, setLastApplied] = useState<PresetPayload | null>(null);
-  const [currentSelectedName, setCurrentSelectedName] = useState<string>("");
+  const [lastAppliedSnapshot, setLastAppliedSnapshot] =
+    useState<PresetSnapshot | null>(null);
 
+  const activePreset = useMemo(
+    () => presets.find((p) => (p.id ?? p.name) === selectedPresetId) ?? null,
+    [presets, selectedPresetId],
+  );
+
+  // HELPERS: naam-controle en uniqueizer voor presets
   function nameExists(name: string, excludeId?: string) {
     return presets.some(
       (p) =>
@@ -498,41 +510,83 @@ export default function OnboardingClassifier() {
     while (nameExists(`${base} -${i}`, excludeId)) i++;
     return `${base} -${i}`;
   }
+
+  function createSnapshotFromPayload(
+    payload: PresetPayload | null,
+  ): PresetSnapshot | null {
+    if (!payload?.inputs || !payload?.gw || !payload?.vw || !payload?.th) {
+      return null;
+    }
+    return {
+      inputs: JSON.parse(JSON.stringify(payload.inputs)) as Inputs,
+      gw: JSON.parse(JSON.stringify(payload.gw)) as GroupWeights,
+      vw: JSON.parse(JSON.stringify(payload.vw)) as VarWeights,
+      th: JSON.parse(JSON.stringify(payload.th)) as Thresholds,
+    };
+  }
+
+  function applySnapshot(snapshot: PresetSnapshot) {
+    setInputs(snapshot.inputs);
+    setGw(snapshot.gw);
+    setVw(snapshot.vw);
+    setTh(snapshot.th);
+    setLastAppliedSnapshot(snapshot);
+  }
+
+  function applyPresetRecord(rec: PresetRecord, announce = true) {
+    const snapshot = createSnapshotFromPayload(rec.data as PresetPayload);
+    if (!snapshot) {
+      toaster.show(
+        "Preset is ongeldig (test/smoke) — niet toegepast",
+        "error",
+      );
+      return false;
+    }
+    applySnapshot(snapshot);
+    if (announce) {
+      toaster.show(`Toegepast: ${rec.name}`, "success");
+    }
+    return true;
+  }
+
   function handleSelectPreset(id: string) {
     setSelectedPresetId(id);
+        if (!id) {
+      setLastAppliedSnapshot(null);
+      return;
+    }
     const rec = presets.find((p) => (p.id ?? p.name) === id);
     if (rec) {
-      setPresetName(rec.name);
-      setCurrentSelectedName(rec.name);
-      setLastApplied(rec.data);
+      const applied = applyPresetRecord(rec);
+      if (!applied) {
+        setSelectedPresetId("");
+      }
     }
   }
 
   async function handleSavePreset() {
-        if (isSavingPreset) return;
-    if (selectedPresetId) {
-      toaster.show("Preset actief — gebruik ‘Wijzigingen opslaan’.", "info");
-      return;
-    }
+    if (isSavingPreset) return;
     const raw = (presetName ?? "").trim();
     if (raw.length < 3) {
       toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
-    const finalName = uniqueizeName(raw);
     const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
 
     setIsSavingPreset(true);
     toaster.show("Opslaan…", "info");
     try {
+      const finalName = uniqueizeName(raw);
       await savePreset(finalName, payload);
-       const list = await refreshPresets(false);
+      const list = await refreshPresets(false);
       const created = list.find((p) => p.name === finalName);
       if (created) {
         const identifier = created.id ?? created.name;
         setSelectedPresetId(identifier);
-        setCurrentSelectedName(created.name);
-        setLastApplied(created.data as PresetPayload);
+        applyPresetRecord(created, false);
+      } else {
+        const snapshot = createSnapshotFromPayload(payload);
+        if (snapshot) setLastAppliedSnapshot(snapshot);
       }
       setPresetName(finalName);
       toaster.show(`Preset opgeslagen ✔ (${finalName})`, "success");
@@ -548,36 +602,39 @@ export default function OnboardingClassifier() {
   }
 
   async function handleSaveChanges() {
-        if (isSavingChanges) return;
+    if (isSavingChanges) return;
     if (!selectedPresetId) {
       toaster.show("Geen preset gekozen", "error");
       return;
     }
 
-    const current = presets.find((p) => (p.id ?? p.name) === selectedPresetId);
     const typed = (presetName ?? "").trim();
     if (typed && typed.length < 3) {
       toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
 
-    const target = typed ? typed : current?.name || "";
+    const target = typed.length ? typed : activePreset?.name || "";
     if (target.length < 3) {
       toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
 
-    const finalName = uniqueizeName(target, selectedPresetId);
     const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
 
-     setIsSavingChanges(true);
+    setIsSavingChanges(true);
     toaster.show("Wijzigingen opslaan…", "info");
     try {
-      await updatePreset(selectedPresetId, finalName, payload);
+      const finalName = uniqueizeName(target, selectedPresetId);
+      const res = await updatePreset(selectedPresetId, finalName, payload);
+      const snapshot = createSnapshotFromPayload(payload);
+      if (snapshot) {
+        setLastAppliedSnapshot(snapshot);
+      }
+      if (res?.id) setSelectedPresetId(res.id);
+      else setSelectedPresetId(finalName);
       await refreshPresets(false);
       setPresetName(finalName);
-      setCurrentSelectedName(finalName);
-      setLastApplied(payload); // dirty -> false
       toaster.show(`Wijzigingen opgeslagen ✔ (${finalName})`, "success");
     } catch (e: any) {
       console.error(e);
@@ -596,12 +653,7 @@ export default function OnboardingClassifier() {
     try {
       const list = await loadPresets();
       setPresets(list);
-      const current = selectedPresetId
-        ? list.find((p) => (p.id ?? p.name) === selectedPresetId)
-        : null;
-      if (current) {
-        setCurrentSelectedName(current.name);
-      }
+
       if (announce) {
         toaster.show(`Verversd: ${list.length} presets`, "info");
       }
@@ -626,33 +678,23 @@ export default function OnboardingClassifier() {
   }, []);
 
   async function handleApplyPreset() {
-    const rec = presets.find((p) => (p.id ?? p.name) === selectedPresetId);
-    if (!rec) {
+    if (!selectedPresetId) {
       toaster.show("Kies een preset", "error");
       return;
     }
-
-    const d: any = rec.data || {};
-    if (!d.inputs || !d.gw || !d.vw || !d.th) {
-      toaster.show(
-        "Preset is ongeldig (test/smoke) — niet toegepast",
-        "error",
-      );
+    const rec = presets.find((p) => (p.id ?? p.name) === selectedPresetId);
+    if (!rec) {
+      toaster.show("Kies een geldige preset", "error");
       return;
     }
     try {
-      setInputs(d.inputs);
-      setGw(d.gw);
-      setVw(d.vw);
-      setTh(d.th);
-      const data = rec.data as PresetPayload;
-      setLastApplied(data);
-      setCurrentSelectedName(rec.name);
-      setPresetName(rec.name);
-      toaster.show(`Toegepast: ${rec.name}`, "success");
-    } catch (e) {
+      applyPresetRecord(rec);
+    } catch (e: any) {
       console.error(e);
-      toaster.show("Fout bij toepassen — zie Console", "error");
+      toaster.show(
+        `Fout bij toepassen — ${e?.message ?? "zie Console"}`,
+        "error",
+      );
     }
   }
 
@@ -666,8 +708,7 @@ export default function OnboardingClassifier() {
       const res = await deletePreset(selectedPresetId);
       setSelectedPresetId("");
       setPresetName("");
-      setCurrentSelectedName("");
-      setLastApplied(null);
+      setLastAppliedSnapshot(null);
       await refreshPresets(false);
       toaster.show(
         res.count ? `Verwijderd ✔ (${res.count})` : "Niets verwijderd",
@@ -807,7 +848,7 @@ export default function OnboardingClassifier() {
       ];
       const { exportPdf } = await import("./lib/exportPdf");
       exportPdf({
-        presetName: (presetName || currentSelectedName || "") as string,
+        presetName: (presetName || activePreset?.name || "") as string,
         classification: classificationCode,
         sections,
       });
@@ -876,30 +917,23 @@ export default function OnboardingClassifier() {
     setOtherScenario(null);
     setSelectedPresetId("");
     setPresetName("");
-    setCurrentSelectedName("");
-    setLastApplied(null);
+    setLastAppliedSnapshot(null);
     toaster.show("Alles gereset (A + B)", "info");
   }
 
   const currentPayload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
-    const trimmedPresetName = (presetName ?? "").trim();
-  const canSaveNewPreset = !selectedPresetId && trimmedPresetName.length >= 3;
+  const trimmedPresetName = (presetName ?? "").trim();
+  const canSaveNewPreset = trimmedPresetName.length >= 3;
+  const currentSnapshot = {
+    inputs: currentPayload.inputs,
+    gw: currentPayload.gw,
+    vw: currentPayload.vw,
+    th: currentPayload.th,
+  };
   const isDirty =
     !!selectedPresetId &&
-    !!lastApplied &&
-    (JSON.stringify({
-      inputs: currentPayload.inputs,
-      gw: currentPayload.gw,
-      vw: currentPayload.vw,
-      th: currentPayload.th,
-    }) !==
-      JSON.stringify({
-        inputs: lastApplied.inputs,
-        gw: lastApplied.gw,
-        vw: lastApplied.vw,
-        th: lastApplied.th,
-      }) ||
-      (presetName.trim() !== "" && presetName.trim() !== currentSelectedName));
+      !!lastAppliedSnapshot &&
+    JSON.stringify(currentSnapshot) !== JSON.stringify(lastAppliedSnapshot);
 
   // ---------- Render ----------
   return (
@@ -970,7 +1004,7 @@ export default function OnboardingClassifier() {
       {/* --- PRESETS CARD --- */}
       <div data-id="presets-card" style={{ ...card, ...section }}>
         <h2 style={h2}>Presets</h2>
-        <div style={grid3}>
+        <div style={gridPresets}>
           <div>
             <label style={label}>Naam</label>
             <input
@@ -998,7 +1032,7 @@ export default function OnboardingClassifier() {
 
           <div>
             <label style={label}>
-              Beschikbare presets {loadingPresets ? "(laden…)" : ""}
+                Gekozen preset {loadingPresets ? "(laden…)" : ""}
             </label>
             <select
               style={input}
@@ -1067,23 +1101,6 @@ export default function OnboardingClassifier() {
                   {isSavingChanges ? "Bezig..." : "Wijzigingen opslaan"}
                 </button>
               )}
-            </div>
-            <div style={small}>
-              Opslag: {supabase ? "Supabase" : "Browser (localStorage)"}
-            </div>
-          </div>
-
-          <div>
-            <label style={label}>Preset actie</label>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-              <button
-                onClick={clearScenarioB}
-                style={{
-                  ...btnSecondary,
-                }}
-              >
-                Scenario B wissen
-              </button>
             </div>
           </div>
         </div>
