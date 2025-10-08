@@ -21,7 +21,7 @@ Features
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
-import { exportPdf, type PdfSection } from "./lib/exportPdf";
+import type { PdfSection } from "./lib/exportPdf";
 import {
   loadPresets,
   savePreset,
@@ -799,8 +799,8 @@ export default function OnboardingClassifier() {
           Onboarding Classifier
         </h1>
         <div style={{ display: "flex", gap: 8 }}>
-              <button
-            onClick={() => {
+          <button
+            onClick={async () => {
               const classificationCode =
                 typeof classification === "string"
                   ? classification
@@ -845,6 +845,7 @@ export default function OnboardingClassifier() {
                   ],
                 },
               ];
+                            const { exportPdf } = await import("./lib/exportPdf");
               exportPdf({
                 presetName: (presetName || currentSelectedName || "") as string,
                 classification: classificationCode,
