@@ -21,6 +21,7 @@ Features
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabaseClient";
+import { exportPdf, type PdfSection } from "./lib/exportPdf";
 import {
   loadPresets,
   savePreset,
@@ -798,6 +799,68 @@ export default function OnboardingClassifier() {
           Onboarding Classifier
         </h1>
         <div style={{ display: "flex", gap: 8 }}>
+              <button
+            onClick={() => {
+              const classificationCode =
+                typeof classification === "string"
+                  ? classification
+                  : classification?.code ?? "n.v.t.";
+              const toRow = (label: string, v: unknown): [string, string] => [
+                label,
+                String(v ?? ""),
+              ];
+              const selectedList = (options: MultiOptions) => {
+                const active = Object.entries(options)
+                  .filter(([, isActive]) => isActive)
+                  .map(([key]) => key);
+                return active.length ? active.join(", ") : "Geen";
+              };
+              const sections: PdfSection[] = [
+                {
+                  title: "Operationele kenmerken",
+                  rows: [
+                    toRow("Aantal SKU's", inputs.skuCount),
+                    toRow("SKU-complexiteit", inputs.skuComplexity),
+                    toRow("Ordervolume/mnd (gem.)", inputs.orderVolume),
+                    toRow("Piekvolume", inputs.orderPeak),
+                    toRow("Seizoensinvloeden", inputs.seizoensinvloed),
+                    toRow("Retourpercentage", `${inputs.retourPercentage}%`),
+                    toRow(
+                      "VAS-activiteiten",
+                      selectedList(inputs.vasActiviteiten),
+                    ),
+                    toRow(
+                      "Inbound bijzonderheden",
+                      selectedList(inputs.inboundBijzonderheden),
+                    ),
+                  ],
+                },
+                {
+                  title: "Technische integratie",
+                  rows: [
+                    toRow("Platformtype", inputs.platformType),
+                    toRow("Type koppeling", inputs.typeKoppeling),
+                    toRow("PostNL API's", selectedList(inputs.postnlApis)),
+                    toRow("Kanalen", inputs.verzendMethoden),
+                  ],
+                },
+              ];
+              exportPdf({
+                presetName: (presetName || currentSelectedName || "") as string,
+                classification: classificationCode,
+                sections,
+              });
+            }}
+            style={{
+              padding: "8px 12px",
+              borderRadius: 10,
+              border: "1px solid #e5e7eb",
+              background: "#111827",
+              color: "#fff",
+            }}
+          >
+            Export PDF
+          </button>
           <button
             onClick={exportCsv}
             style={{
