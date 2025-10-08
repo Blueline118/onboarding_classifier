@@ -20,7 +20,8 @@ Features
 */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { HeaderBar } from "@/features/classifier";
+import { HeaderBar, InputsForm } from "@/features/classifier";
+import type { ClassifierInput } from "@/features/classifier";
 import type { PdfSection } from "./lib/exportPdf";
 import {
   loadPresets,
@@ -34,44 +35,14 @@ import { useToaster } from "./components/ui/Toaster";
 import { btnPrimary, btnSecondary } from "./ui/buttons";
 import PresetsCard from "./features/classifier/components/PresetsCard";
 
+type MultiOptions = Record<string, boolean>;
+
+
 // ---------- Types ----------
 
 type NumDict = Record<string, number>;
 
-type DropdownOption = { label: string; value: string };
-
-type MultiOptions = Record<string, boolean>;
-
-type Inputs = {
-  // Numeric
-  skuCount: number;
-  orderVolume: number;
-  orderPeak: number;
-  retourPercentage: number; // 0..100
-  aantalAfdelingen: number;
-  // Dropdowns
-  skuComplexity: string; // standaard/varianten/bundels
-  seizoensinvloed: string; // laag/medium/hoog
-  platformType: string; // Shopify/Magento/WooCommerce/Lightspeed/Bol.com/API
-  typeKoppeling: string; // API/SFTP/plugin/handmatig
-  configDoor: string; // klant/postnl/hybride
-  mateMaatwerk: string; // geen/licht/zwaar
-  mappingComplexiteit: string; // standaard/custom/dynamisch
-  testCapaciteit: string; // laag/gemiddeld/hoog
-  voorraadBeheer: string; // realtime/batch/handmatig
-  replenishment: string; // geautomatiseerd/periodiek/handmatig
-  verzendMethoden: string; // standaard/maatwerk/externe
-  retourProces: string; // portaal/handmatig
-  dashboardGebruik: string; // dagelijks/wekelijks/zelden
-  rapportageBehoefte: string; // standaard/uitgebreid/maatwerk
-  serviceUitbreiding: string; // nee/ja
-
-  scopeWijzigingen: string; // weinig/gemiddeld/veel
-  // Multi-select
-  vasActiviteiten: MultiOptions; // stickeren/bundelen/inspectie
-  inboundBijzonderheden: MultiOptions; // kwaliteitscontrole/afwijkende verpakking/barcodering
-  postnlApis: MultiOptions; // Locatie/Checkout/Retour/Track & Trace
-};
+type Inputs = ClassifierInput;
 
 type PresetSnapshot = {
   inputs: Inputs;
@@ -160,9 +131,7 @@ const defaultInputs = (): Inputs => ({
   scopeWijzigingen: "gemiddeld",
   vasActiviteiten: { stickeren: true, bundelen: false, inspectie: false },
   inboundBijzonderheden: {
-
-
-        kwaliteitscontrole: true,
+    kwaliteitscontrole: true,
     "afwijkende verpakking": false,
     barcodering: true,
   },
@@ -434,27 +403,6 @@ const h2: React.CSSProperties = {
   margin: "0 0 8px",
 };
 const small: React.CSSProperties = { fontSize: 12, color: "#6b7280" };
-
-const dropdown = (opts: string[]) => opts.map((o) => ({ label: o, value: o }));
-
-const DD = {
-  skuComplexity: dropdown(["standaard", "varianten", "bundels"]),
-  seizoensinvloed: dropdown(["laag", "medium", "hoog"]),
-  platformType: dropdown(["Shopify", "Magento", "WooCommerce", "Lightspeed", "Bol.com", "API"]),
-  typeKoppeling: dropdown(["API", "SFTP", "plugin", "handmatig"]),
-  configDoor: dropdown(["klant", "postnl", "hybride"]),
-  mateMaatwerk: dropdown(["geen", "licht", "zwaar"]),
-  mappingComplexiteit: dropdown(["standaard", "custom", "dynamisch"]),
-  testCapaciteit: dropdown(["laag", "gemiddeld", "hoog"]),
-  voorraadBeheer: dropdown(["realtime", "batch", "handmatig"]),
-  replenishment: dropdown(["geautomatiseerd", "periodiek", "handmatig"]),
-  verzendMethoden: dropdown(["standaard", "maatwerk", "externe"]),
-  retourProces: dropdown(["portaal", "handmatig"]),
-  dashboardGebruik: dropdown(["dagelijks", "wekelijks", "zelden"]),
-  rapportageBehoefte: dropdown(["standaard", "uitgebreid", "maatwerk"]),
-  serviceUitbreiding: dropdown(["nee", "ja"]),
-  scopeWijzigingen: dropdown(["weinig", "gemiddeld", "veel"]),
-};
 
 // ---------- CSV Export ----------
 function toCSV(rows: Record<string, any>[]) {
@@ -784,14 +732,8 @@ export default function OnboardingClassifier() {
   }, [contributionsAll]);
 
   // Handlers
-  const update = (patch: Partial<Inputs>) =>
+  const handleInputChange = (patch: Partial<Inputs>) =>
     setInputs((prev) => ({ ...prev, ...patch }));
-  const updateMulti = (key: keyof Inputs, sub: string, val: boolean) => {
-    setInputs((prev) => ({
-      ...prev,
-      [key]: { ...(prev as any)[key], [sub]: val } as any,
-    }));
-  };
 
   function saveScenarioB() {
     const payload = { name: scenarioName, inputs, gw, vw, th };
@@ -1024,321 +966,7 @@ export default function OnboardingClassifier() {
       >
         {/* Left: Inputs */}
         <div>
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Basiskenmerken</h2>
-            <div style={grid3}>
-              <div>
-                <label style={label}>Aantal SKU’s</label>
-                <input
-                  style={input}
-                  type="number"
-                  min={0}
-                  max={100000}
-                  value={inputs.skuCount}
-                  onChange={(e) => update({ skuCount: Number(e.target.value) })}
-                />
-              </div>
-              <div>
-                <label style={label}>Ordervolume / maand</label>
-                <input
-                  style={input}
-                  type="number"
-                  min={0}
-                  max={10000000}
-                  value={inputs.orderVolume}
-                  onChange={(e) =>
-                    update({ orderVolume: Number(e.target.value) })
-                  }
-                />
-              </div>
-              <div>
-                <label style={label}>Orderpiek / maand</label>
-                <input
-                  style={input}
-                  type="number"
-                  min={0}
-                  max={10000000}
-                  value={inputs.orderPeak}
-                  onChange={(e) =>
-                    update({ orderPeak: Number(e.target.value) })
-                  }
-                />
-              </div>
-              <div>
-                <label style={label}>Retourpercentage %</label>
-                <input
-                  style={input}
-                  type="number"
-                  min={0}
-                  max={100}
-                  value={inputs.retourPercentage}
-                  onChange={(e) =>
-                    update({ retourPercentage: Number(e.target.value) })
-                  }
-                />
-              </div>
-              <div>
-                <label style={label}>Aantal afdelingen (klantzijde)</label>
-                <input
-                  style={input}
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={inputs.aantalAfdelingen}
-                  onChange={(e) =>
-                    update({ aantalAfdelingen: Number(e.target.value) })
-                  }
-                />
-              </div>
-              <div>
-                <label style={label}>SKU-complexiteit</label>
-                <select
-                  style={input}
-                  value={inputs.skuComplexity}
-                  onChange={(e) => update({ skuComplexity: e.target.value })}
-                >
-                  {DD.skuComplexity.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Seizoensinvloed</label>
-                <select
-                  style={input}
-                  value={inputs.seizoensinvloed}
-                  onChange={(e) => update({ seizoensinvloed: e.target.value })}
-                >
-                  {DD.seizoensinvloed.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Platformtype</label>
-                <select
-                  style={input}
-                  value={inputs.platformType}
-                  onChange={(e) => update({ platformType: e.target.value })}
-                >
-                  {DD.platformType.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Type koppeling</label>
-                <select
-                  style={input}
-                  value={inputs.typeKoppeling}
-                  onChange={(e) => update({ typeKoppeling: e.target.value })}
-                >
-                  {DD.typeKoppeling.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Configuratie door</label>
-                <select
-                  style={input}
-                  value={inputs.configDoor}
-                  onChange={(e) => update({ configDoor: e.target.value })}
-                >
-                  {DD.configDoor.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Mate van maatwerk</label>
-                <select
-                  style={input}
-                  value={inputs.mateMaatwerk}
-                  onChange={(e) => update({ mateMaatwerk: e.target.value })}
-                >
-                  {DD.mateMaatwerk.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Mapping-complexiteit</label>
-                <select
-                  style={input}
-                  value={inputs.mappingComplexiteit}
-                  onChange={(e) =>
-                    update({ mappingComplexiteit: e.target.value })
-                  }
-                >
-                  {DD.mappingComplexiteit.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Testcapaciteit (klant)</label>
-                <select
-                  style={input}
-                  value={inputs.testCapaciteit}
-                  onChange={(e) => update({ testCapaciteit: e.target.value })}
-                >
-                  {DD.testCapaciteit.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Voorraadbeheer</label>
-                <select
-                  style={input}
-                  value={inputs.voorraadBeheer}
-                  onChange={(e) => update({ voorraadBeheer: e.target.value })}
-                >
-                  {DD.voorraadBeheer.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Replenishment</label>
-                <select
-                  style={input}
-                  value={inputs.replenishment}
-                  onChange={(e) => update({ replenishment: e.target.value })}
-                >
-                  {DD.replenishment.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Verzendmethoden</label>
-                <select
-                  style={input}
-                  value={inputs.verzendMethoden}
-                  onChange={(e) => update({ verzendMethoden: e.target.value })}
-                >
-                  {DD.verzendMethoden.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Retourproces</label>
-                <select
-                  style={input}
-                  value={inputs.retourProces}
-                  onChange={(e) => update({ retourProces: e.target.value })}
-                >
-                  {DD.retourProces.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Dashboardgebruik</label>
-                <select
-                  style={input}
-                  value={inputs.dashboardGebruik}
-                  onChange={(e) => update({ dashboardGebruik: e.target.value })}
-                >
-                  {DD.dashboardGebruik.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Rapportagebehoefte</label>
-                <select
-                  style={input}
-                  value={inputs.rapportageBehoefte}
-                  onChange={(e) =>
-                    update({ rapportageBehoefte: e.target.value })
-                  }
-                >
-                  {DD.rapportageBehoefte.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Service-uitbreiding</label>
-                <select
-                  style={input}
-                  value={inputs.serviceUitbreiding}
-                  onChange={(e) => update({ serviceUitbreiding: e.target.value })}
-                >
-                  {DD.serviceUitbreiding.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label style={label}>Scope wijzigingen</label>
-                <select
-                  style={input}
-                  value={inputs.scopeWijzigingen}
-                  onChange={(e) => update({ scopeWijzigingen: e.target.value })}
-                >
-                  {DD.scopeWijzigingen.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Variabele selectie</h2>
-            <div style={grid3}>
-              {Object.entries(inputs.vasActiviteiten).map(([name, active]) => (
-                <label key={name} style={{ ...label, display: "flex", gap: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={active}
-                    onChange={(e) =>
-                      updateMulti("vasActiviteiten", name, e.target.checked)
-                    }
-                  />
-                  {name}
-                </label>
-              ))}
-            </div>
-          </div>
-
+          <InputsForm value={inputs} onChange={handleInputChange} />
           <div style={{ ...card, ...section }}>
             <h2 style={h2}>Group weights</h2>
             <div style={grid3}>
