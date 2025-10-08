@@ -1,12 +1,38 @@
-import { FC } from "react";
+import type { ReactNode } from "react";
 
-const HeaderBar: FC = () => {
-  return (
-    <header>
-      {/* TODO: Replace placeholder layout with actual classifier header */}
-      <h1>Classifier Header Placeholder</h1>
-    </header>
-  );
+export type HeaderBarProps = {
+  title: string;
+  leftSlot?: ReactNode;
+  rightSlot?: ReactNode;
 };
 
-export default HeaderBar;
+export default function HeaderBar({
+  title,
+  leftSlot,
+  rightSlot,
+}: HeaderBarProps) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center",
+        marginBottom: 12,
+      }}
+    >
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: leftSlot ? 8 : 0,
+        }}
+      >
+        {leftSlot ? <div>{leftSlot}</div> : null}
+        <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>{title}</h1>
+      </div>
+      {rightSlot ? (
+        <div style={{ display: "flex", gap: 8 }}>{rightSlot}</div>
+      ) : null}
+    </div>
+  );
+}
