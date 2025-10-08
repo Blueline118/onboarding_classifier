@@ -1,6 +1,11 @@
 /* eslint-disable */
 import OnboardingClassifier from "./OnboardingClassifier";
+import { ToasterProvider } from "./components/ui/Toaster";
 
 export default function App() {
-  return <OnboardingClassifier />;
+  return (
+    <ToasterProvider>
+      <OnboardingClassifier />
+    </ToasterProvider>
+  );
 }
