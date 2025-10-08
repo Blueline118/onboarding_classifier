@@ -20,8 +20,8 @@ Features
 */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { HeaderBar, InputsForm } from "@/features/classifier";
-import type { ClassifierInput } from "@/features/classifier";
+import { HeaderBar, InputsForm, ResultPanel } from "@/features/classifier";
+import type { ClassifierInput, ClassifierResult } from "@/features/classifier";
 import type { PdfSection } from "./lib/exportPdf";
 import {
   loadPresets,
@@ -409,7 +409,7 @@ function toCSV(rows: Record<string, any>[]) {
   const headers = Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
   const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
   const lines = [headers.join(",")].concat(
-    rows.map((r) => headers.map((h) => esc(r[h])).join(",")),
+    rows.map((r) => headers.map((h) => esc(r[h])).join(","))
   );
   return lines.join("\n");
 }
@@ -421,7 +421,7 @@ export default function OnboardingClassifier() {
   const [vw, setVw] = useState<VarWeights>(defaultVarWeights());
   const [th, setTh] = useState<Thresholds>(defaultThresholds());
   const [showAdvanced, setShowAdvanced] = useState(false);
-  
+
   // Presets
   const [presets, setPresets] = useState<PresetRecord[]>([]);
   const [presetName, setPresetName] = useState("");
@@ -730,6 +730,35 @@ export default function OnboardingClassifier() {
       .slice(0, 3);
     return ranked;
   }, [contributionsAll]);
+
+  const result = useMemo<ClassifierResult>(() => {
+    const classificationLabel = `${classification.code} — ${classification.lead}`;
+    return {
+      totalScoreLabel: totalScore.toFixed(1),
+      totalScoreProgress: clamp(totalScore),
+      classification: {
+        code: classification.code,
+        lead: classification.lead,
+        color: classification.color,
+        label: classificationLabel,
+      },
+      topContributors: top3.map((item) => ({
+        key: item.key,
+        title: item.key,
+        detail: `Score ${item.score.toFixed(1)} • gewicht ${item.weight.toFixed(
+          2,
+        )} • groep ${item.group} (${item.groupWeight.toFixed(2)})`,
+      })),
+      groupScores: groupScores.map((gs) => ({
+        key: gs.key,
+        title: gs.key,
+        scoreLabel: gs.score.toFixed(1),
+        progress: clamp(gs.score),
+      })),
+    };
+  }, [classification, groupScores, top3, totalScore]);
+
+  const isBusy = false;
 
   // Handlers
   const handleInputChange = (patch: Partial<Inputs>) =>
@@ -1044,88 +1073,7 @@ export default function OnboardingClassifier() {
 
         {/* Right: Results */}
         <div>
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Resultaat</h2>
-            <div style={{ fontSize: 32, fontWeight: 700 }}>
-              {totalScore.toFixed(1)}
-            </div>
-            <div
-              style={{
-                fontSize: 18,
-                color: classification.color,
-                fontWeight: 700,
-                marginTop: 4,
-              }}
-            >
-              {classification.code} — {classification.lead}
-            </div>
-            <div
-              style={{
-                height: 10,
-                background: "#f3f4f6",
-                borderRadius: 999,
-                marginTop: 12,
-              }}
-            >
-              <div
-                style={{
-                  width: `${clamp(totalScore)}%`,
-                  height: "100%",
-                  background: classification.color,
-                  borderRadius: 999,
-                }}
-              />
-            </div>
-          </div>
-
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Top 3 bijdragen</h2>
-            <ol style={{ margin: 0, paddingLeft: 20 }}>
-              {top3.map((item) => (
-                <li key={item.key} style={{ marginBottom: 6 }}>
-                  <div style={{ fontWeight: 600 }}>{item.key}</div>
-                  <div style={{ ...small }}>
-                    Score {item.score.toFixed(1)} • gewicht {item.weight.toFixed(2)} •
-                    groep {item.group} ({item.groupWeight.toFixed(2)})
-                  </div>
-                </li>
-              ))}
-            </ol>
-          </div>
-
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Groepsscores</h2>
-            <div>
-              {groupScores.map((gs) => (
-                <div key={gs.key} style={{ marginBottom: 8 }}>
-                  <div
-                    style={{ display: "flex", justifyContent: "space-between" }}
-                  >
-                    <span style={{ textTransform: "capitalize" }}>
-                      {gs.key}
-                    </span>
-                    <span>{gs.score.toFixed(1)}</span>
-                  </div>
-                  <div
-                    style={{
-                      height: 6,
-                      background: "#f3f4f6",
-                      borderRadius: 999,
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: `${clamp(gs.score)}%`,
-                        height: "100%",
-                        background: "#60a5fa",
-                        borderRadius: 999,
-                      }}
-                    />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <ResultPanel result={result} isBusy={isBusy} />
 
           {/* Scenario compare */}
           <div style={{ ...card }}>
