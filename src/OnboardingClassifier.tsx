@@ -19,9 +19,15 @@ Features
 - Reset to defaults
 */
 
-
 import React, { useEffect, useMemo, useState } from "react";
-import { HeaderBar, InputsForm, ResultPanel } from "@/features/classifier";
+import {
+  HeaderBar,
+  InputsForm,
+  ResultPanel,
+  ClassifierProvider,
+  useClassifierState,
+  useClassifierActions,
+} from "@/features/classifier";
 import type { ClassifierInput, ClassifierResult } from "@/features/classifier";
 import type { PdfSection } from "./lib/exportPdf";
 import {
@@ -37,7 +43,6 @@ import { btnPrimary, btnSecondary } from "./ui/buttons";
 import PresetsCard from "./features/classifier/components/PresetsCard";
 
 type MultiOptions = Record<string, boolean>;
-
 
 // ---------- Types ----------
 
@@ -418,11 +423,22 @@ function toCSV(rows: Record<string, any>[]) {
 
 // ---------- Main Component ----------
 export default function OnboardingClassifier() {
-  const [inputs, setInputs] = useState<Inputs>(defaultInputs());
+  return (
+    <ClassifierProvider>
+      <OnboardingClassifierContent />
+    </ClassifierProvider>
+  );
+}
+
+function OnboardingClassifierContent() {
+  const { input, result, isBusy } = useClassifierState();
+  const { setInput, recalc } = useClassifierActions();
+
   const [gw, setGw] = useState<GroupWeights>(defaultGroupWeights());
   const [vw, setVw] = useState<VarWeights>(defaultVarWeights());
   const [th, setTh] = useState<Thresholds>(defaultThresholds());
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [inputInitialized, setInputInitialized] = useState(false);
 
   // Presets
   const [presets, setPresets] = useState<PresetRecord[]>([]);
@@ -435,6 +451,13 @@ export default function OnboardingClassifier() {
   const [isExportingCsv, setIsExportingCsv] = useState(false);
 
   const toaster = useToaster();
+
+  useEffect(() => {
+    if (!inputInitialized) {
+      setInput(defaultInputs());
+      setInputInitialized(true);
+    }
+  }, [inputInitialized, setInput]);
 
   // === PRESET HELPERS — SINGLE SOURCE OF TRUTH ===
   const [lastAppliedSnapshot, setLastAppliedSnapshot] =
@@ -475,7 +498,7 @@ export default function OnboardingClassifier() {
   }
 
   function applySnapshot(snapshot: PresetSnapshot) {
-    setInputs(snapshot.inputs);
+    setInput(snapshot.inputs);
     setGw(snapshot.gw);
     setVw(snapshot.vw);
     setTh(snapshot.th);
@@ -500,7 +523,7 @@ export default function OnboardingClassifier() {
 
   function handleSelectPreset(id: string) {
     setSelectedPresetId(id);
-        if (!id) {
+    if (!id) {
       setLastAppliedSnapshot(null);
       return;
     }
@@ -520,7 +543,7 @@ export default function OnboardingClassifier() {
       toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
-    const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
+    const payload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
 
     setIsSavingPreset(true);
     toaster.show("Opslaan…", "info");
@@ -569,7 +592,7 @@ export default function OnboardingClassifier() {
       return;
     }
 
-    const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
+    const payload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
 
     setIsSavingChanges(true);
     toaster.show("Wijzigingen opslaan…", "info");
@@ -661,7 +684,7 @@ export default function OnboardingClassifier() {
       await refreshPresets(false);
       toaster.show(
         res.count ? `Verwijderd ✔ (${res.count})` : "Niets verwijderd",
-                res.count ? "success" : "info",
+        res.count ? "success" : "info",
       );
     } catch (e: any) {
       console.error(e);
@@ -695,7 +718,7 @@ export default function OnboardingClassifier() {
         }[];
       }[] = [];
       (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-        const { groupScore, contributions } = computeGroupScore(g, inputs, vw);
+        const { groupScore, contributions } = computeGroupScore(g, input, vw);
         entries.push({ key: g, score: groupScore, contribs: contributions });
       });
       const total = entries.reduce(
@@ -716,7 +739,7 @@ export default function OnboardingClassifier() {
         totalScore: clamp(total),
         classification: cls,
       };
-    }, [inputs, gw, vw, th]);
+    }, [input, gw, vw, th]);
 
   const top3 = useMemo(() => {
     const ranked = contributionsAll
@@ -733,7 +756,7 @@ export default function OnboardingClassifier() {
     return ranked;
   }, [contributionsAll]);
 
-  const result = useMemo<ClassifierResult>(() => {
+  const computedResult = useMemo<ClassifierResult>(() => {
     const classificationLabel = `${classification.code} — ${classification.lead}`;
     return {
       totalScoreLabel: totalScore.toFixed(1),
@@ -760,14 +783,19 @@ export default function OnboardingClassifier() {
     };
   }, [classification, groupScores, top3, totalScore]);
 
-  const isBusy = false;
+  useEffect(() => {
+    if (result !== computedResult) {
+      recalc(computedResult);
+    }
+  }, [computedResult, recalc, result]);
 
   // Handlers
-  const handleInputChange = (patch: Partial<Inputs>) =>
-    setInputs((prev) => ({ ...prev, ...patch }));
+  const handleInputChange = (patch: Partial<Inputs>) => {
+    setInput(patch);
+  };
 
   function saveScenarioB() {
-    const payload = { name: scenarioName, inputs, gw, vw, th };
+    const payload = { name: scenarioName, inputs: input, gw, vw, th };
     writeScenarioB(payload);
     setOtherScenario(payload);
     toaster.show("Scenario B bewaard (sessie)", "success");
@@ -795,26 +823,26 @@ export default function OnboardingClassifier() {
         {
           title: "Operationele kenmerken",
           rows: [
-            toRow("Aantal SKU's", inputs.skuCount),
-            toRow("SKU-complexiteit", inputs.skuComplexity),
-            toRow("Ordervolume/mnd (gem.)", inputs.orderVolume),
-            toRow("Piekvolume", inputs.orderPeak),
-            toRow("Seizoensinvloeden", inputs.seizoensinvloed),
-            toRow("Retourpercentage", `${inputs.retourPercentage}%`),
-            toRow("VAS-activiteiten", selectedList(inputs.vasActiviteiten)),
+            toRow("Aantal SKU's", input.skuCount),
+            toRow("SKU-complexiteit", input.skuComplexity),
+            toRow("Ordervolume/mnd (gem.)", input.orderVolume),
+            toRow("Piekvolume", input.orderPeak),
+            toRow("Seizoensinvloeden", input.seizoensinvloed),
+            toRow("Retourpercentage", `${input.retourPercentage}%`),
+            toRow("VAS-activiteiten", selectedList(input.vasActiviteiten)),
             toRow(
               "Inbound bijzonderheden",
-              selectedList(inputs.inboundBijzonderheden),
+              selectedList(input.inboundBijzonderheden),
             ),
           ],
         },
         {
           title: "Technische integratie",
           rows: [
-            toRow("Platformtype", inputs.platformType),
-            toRow("Type koppeling", inputs.typeKoppeling),
-            toRow("PostNL API's", selectedList(inputs.postnlApis)),
-            toRow("Kanalen", inputs.verzendMethoden),
+            toRow("Platformtype", input.platformType),
+            toRow("Type koppeling", input.typeKoppeling),
+            toRow("PostNL API's", selectedList(input.postnlApis)),
+            toRow("Kanalen", input.verzendMethoden),
           ],
         },
       ];
@@ -846,7 +874,7 @@ export default function OnboardingClassifier() {
         class: classification.code,
         lead: classification.lead,
       };
-      Object.entries(inputs).forEach(([k, v]) => {
+      Object.entries(input).forEach(([k, v]) => {
         if (typeof v === "object" && v !== null) {
           row[k] = Object.entries(v as any)
             .filter(([, on]) => !!on)
@@ -874,12 +902,12 @@ export default function OnboardingClassifier() {
       if (url) {
         URL.revokeObjectURL(url);
       }
-          setIsExportingCsv(false);
+      setIsExportingCsv(false);
     }
   };
 
   function resetAll() {
-    setInputs(defaultInputs());
+    setInput(defaultInputs());
     setGw(defaultGroupWeights());
     setVw(defaultVarWeights());
     setTh(defaultThresholds());
@@ -893,7 +921,7 @@ export default function OnboardingClassifier() {
     toaster.show("Alles gereset (A + B)", "info");
   }
 
-  const currentPayload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
+  const currentPayload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
   const trimmedPresetName = (presetName ?? "").trim();
   const canSaveNewPreset = trimmedPresetName.length >= 3;
   const currentSnapshot = {
@@ -904,7 +932,7 @@ export default function OnboardingClassifier() {
   };
   const isDirty =
     !!selectedPresetId &&
-      !!lastAppliedSnapshot &&
+    !!lastAppliedSnapshot &&
     JSON.stringify(currentSnapshot) !== JSON.stringify(lastAppliedSnapshot);
 
   // ---------- Render ----------
@@ -930,11 +958,11 @@ export default function OnboardingClassifier() {
         </h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button
-               onClick={handleExportPdf}
+            onClick={handleExportPdf}
             disabled={isExportingPdf}
             aria-busy={isExportingPdf}
             style={{
-                            ...btnPrimary,
+              ...btnPrimary,
               cursor: isExportingPdf ? "wait" : "pointer",
               opacity: isExportingPdf ? 0.85 : 1,
             }}
@@ -991,155 +1019,154 @@ export default function OnboardingClassifier() {
       />
       {/* --- EINDE PRESETS CARD --- */}
 
-{/* Layout */}
-<div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}>
-  {/* Left: Inputs */}
-  <div>
-    <InputsForm value={inputs} onChange={handleInputChange} />
-
-    <div style={{ ...card, ...section }}>
-      <h2 style={h2}>Group weights</h2>
-      <div style={grid3}>
-        {(Object.keys(gw) as (keyof GroupWeights)[]).map((key) => (
-          <div key={key}>
-            <label style={label}>
-              {key} ({(gw[key] * 100).toFixed(0)}%)
-            </label>
-            <input
-              style={inputStyle}
-              type="number"
-              min={0}
-              max={1}
-              step={0.01}
-              value={gw[key]}
-              onChange={(e) =>
-                setGw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-              }
-            />
-          </div>
-        ))}
-      </div>
-      {groupWarning && (
-        <div style={{ color: "#ef4444", marginTop: 8 }}>
-          Waarschuwing: som ≠ 1.0 (nu {groupSum.toFixed(2)})
-        </div>
-      )}
-    </div>
-
-    <div style={{ ...card, ...section }}>
-      <h2 style={h2}>Variable weights</h2>
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-        {(Object.keys(vw) as (keyof VarWeights)[]).map((key) => (
-          <div key={key} style={{ width: 140 }}>
-            <label style={label}>
-              {key} ({(vw[key] * 100).toFixed(0)}%)
-            </label>
-            <input
-              style={inputStyle}
-              type="number"
-              min={0}
-              max={1}
-              step={0.01}
-              value={vw[key]}
-              onChange={(e) =>
-                setVw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-              }
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-
-    <div style={{ ...card, ...section }}>
-      <h2 style={h2}>Thresholds</h2>
-      <div style={grid3}>
-        {(Object.keys(th) as (keyof Thresholds)[]).map((key) => (
-          <div key={key}>
-            <label style={label}>{key}</label>
-            <input
-              style={inputStyle}
-              type="number"
-              min={0}
-              max={100}
-              value={th[key]}
-              onChange={(e) =>
-                setTh((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-              }
-            />
-          </div>
-        ))}
-      </div>
-    </div>
-  </div>
-
-  {/* Right: wrapper (alles rechts hoort in één kolom) */}
-  <div>
-    <ResultPanel result={result} isBusy={isBusy} />
-
-    {/* Scenario compare */}
-    <div style={{ ...card }}>
-      <h2 style={h2}>Scenario-vergelijking</h2>
-      <div style={{ ...small, marginBottom: 8 }}>
-        Bewaar de huidige invoer als Scenario B en vergelijk.
-      </div>
-      <div style={grid2}>
+      {/* Layout */}
+      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}>
+        {/* Left: Inputs */}
         <div>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>{scenarioName}</div>
-          <div style={{ marginBottom: 4 }}>Score: {totalScore.toFixed(1)}</div>
-          <div>Class: {classification.code} • {classification.lead}</div>
-        </div>
-        <div>
-          <div style={{ fontWeight: 700, marginBottom: 6 }}>
-            {otherScenario?.label ?? "Scenario B (geen)"}
+          <InputsForm value={input} onChange={handleInputChange} />
+
+          <div style={{ ...card, ...section }}>
+            <h2 style={h2}>Group weights</h2>
+            <div style={grid3}>
+              {(Object.keys(gw) as (keyof GroupWeights)[]).map((key) => (
+                <div key={key}>
+                  <label style={label}>
+                    {key} ({(gw[key] * 100).toFixed(0)}%)
+                  </label>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={gw[key]}
+                    onChange={(e) =>
+                      setGw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            {groupWarning && (
+              <div style={{ color: "#ef4444", marginTop: 8 }}>
+                Waarschuwing: som ≠ 1.0 (nu {groupSum.toFixed(2)})
+              </div>
+            )}
           </div>
-          {otherScenario ? (
-            <>
-              <div style={{ marginBottom: 4 }}>
-                Score: {(() => {
-                  const scInputs = otherScenario.inputs as Inputs;
-                  const scGw = otherScenario.gw as GroupWeights;
-                  const scVw = otherScenario.vw as VarWeights;
-                  const entries: any[] = [];
-                  (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-                    const r = computeGroupScore(g, scInputs, scVw);
-                    entries.push({ key: g, score: r.groupScore });
-                  });
-                  const total = entries.reduce(
-                    (acc, e) => acc + e.score * (scGw as any)[e.key],
-                    0
-                  );
-                  return clamp(total).toFixed(1);
-                })()}
+
+          <div style={{ ...card, ...section }}>
+            <h2 style={h2}>Variable weights</h2>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+              {(Object.keys(vw) as (keyof VarWeights)[]).map((key) => (
+                <div key={key} style={{ width: 140 }}>
+                  <label style={label}>
+                    {key} ({(vw[key] * 100).toFixed(0)}%)
+                  </label>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min={0}
+                    max={1}
+                    step={0.01}
+                    value={vw[key]}
+                    onChange={(e) =>
+                      setVw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ ...card, ...section }}>
+            <h2 style={h2}>Thresholds</h2>
+            <div style={grid3}>
+              {(Object.keys(th) as (keyof Thresholds)[]).map((key) => (
+                <div key={key}>
+                  <label style={label}>{key}</label>
+                  <input
+                    style={inputStyle}
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={th[key]}
+                    onChange={(e) =>
+                      setTh((prev) => ({ ...prev, [key]: Number(e.target.value) }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Right: wrapper (alles rechts hoort in één kolom) */}
+        <div>
+          <ResultPanel result={result} isBusy={isBusy} />
+
+          {/* Scenario compare */}
+          <div style={{ ...card }}>
+            <h2 style={h2}>Scenario-vergelijking</h2>
+            <div style={{ ...small, marginBottom: 8 }}>
+              Bewaar de huidige invoer als Scenario B en vergelijk.
+            </div>
+            <div style={grid2}>
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>{scenarioName}</div>
+                <div style={{ marginBottom: 4 }}>Score: {totalScore.toFixed(1)}</div>
+                <div>Class: {classification.code} • {classification.lead}</div>
               </div>
               <div>
-                Class: {(() => {
-                  const scInputs = otherScenario.inputs as Inputs;
-                  const scGw = otherScenario.gw as GroupWeights;
-                  const scVw = otherScenario.vw as VarWeights;
-                  const scTh = otherScenario.th as Thresholds;
-                  const entries: any[] = [];
-                  (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-                    const r = computeGroupScore(g, scInputs, scVw);
-                    entries.push({ key: g, score: r.groupScore });
-                  });
-                  const total = entries.reduce(
-                    (acc, e) => acc + e.score * (scGw as any)[e.key],
-                    0
-                  );
-                  const cls = classify(total, scTh);
-                  return `${cls.code} • ${cls.lead}`;
-                })()}
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>
+                  {otherScenario?.label ?? "Scenario B (geen)"}
+                </div>
+                {otherScenario ? (
+                  <>
+                    <div style={{ marginBottom: 4 }}>
+                      Score: {(() => {
+                        const scInputs = otherScenario.inputs as Inputs;
+                        const scGw = otherScenario.gw as GroupWeights;
+                        const scVw = otherScenario.vw as VarWeights;
+                        const entries: any[] = [];
+                        (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
+                          const r = computeGroupScore(g, scInputs, scVw);
+                          entries.push({ key: g, score: r.groupScore });
+                        });
+                        const total = entries.reduce(
+                          (acc, e) => acc + e.score * (scGw as any)[e.key],
+                          0
+                        );
+                        return clamp(total).toFixed(1);
+                      })()}
+                    </div>
+                    <div>
+                      Class: {(() => {
+                        const scInputs = otherScenario.inputs as Inputs;
+                        const scGw = otherScenario.gw as GroupWeights;
+                        const scVw = otherScenario.vw as VarWeights;
+                        const scTh = otherScenario.th as Thresholds;
+                        const entries: any[] = [];
+                        (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
+                          const r = computeGroupScore(g, scInputs, scVw);
+                          entries.push({ key: g, score: r.groupScore });
+                        });
+                        const total = entries.reduce(
+                          (acc, e) => acc + e.score * (scGw as any)[e.key],
+                          0
+                        );
+                        const cls = classify(total, scTh);
+                        return `${cls.code} • ${cls.lead}`;
+                      })()}
+                    </div>
+                  </>
+                ) : (
+                  <div style={small}>Nog geen Scenario B opgeslagen.</div>
+                )}
               </div>
-            </>
-          ) : (
-            <div style={small}>Nog geen Scenario B opgeslagen.</div>
-          )}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
-</div>
-
 
       <div
         style={{
