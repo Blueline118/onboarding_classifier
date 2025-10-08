@@ -3,10 +3,10 @@ export { default as PresetsCard } from "./components/PresetsCard";
 export { default as InputsForm } from "./components/InputsForm";
 export { default as ResultPanel } from "./components/ResultPanel";
 export { default as ScenarioCompare } from "./components/ScenarioCompare";
-export type { HeaderBarProps } from "./components/HeaderBar";
 
 export type {
   ClassifierInput,
+  MultiOptions,
   ScoreBreakdown,
   ClassifierResult,
   Preset,

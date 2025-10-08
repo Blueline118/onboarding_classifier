@@ -28,13 +28,41 @@ export interface ClassifierInput {
 }
 
 export interface ScoreBreakdown {
-  // TODO: Define score breakdown details
+  label: string;
+  value: number;
+}
+
+export interface ClassificationSummary {
+  code: string;
+  lead: string;
+  color: string;
+  label: string;
+}
+
+export interface ContributorSummary {
+  key: string;
+  title: string;
+  detail: string;
+}
+
+export interface GroupScoreSummary {
+  key: string;
+  title: string;
+  scoreLabel: string;
+  progress: number;
 }
 
 export interface ClassifierResult {
-  // TODO: Define classifier result structure
+  totalScoreLabel: string;
+  totalScoreProgress: number;
+  classification: ClassificationSummary;
+  topContributors: ContributorSummary[];
+  groupScores: GroupScoreSummary[];
 }
 
 export interface Preset {
-  // TODO: Define classifier preset shape
+  id: string;
+  name: string;
+  createdAt: string;
+  updatedAt: string;
 }
