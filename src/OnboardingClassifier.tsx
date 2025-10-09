@@ -20,14 +20,7 @@ Features
 */
 
 import React, { useEffect, useMemo, useState } from "react";
-import {
-  HeaderBar,
-  InputsForm,
-  ResultPanel,
-  ClassifierProvider,
-  useClassifierState,
-  useClassifierActions,
-} from "@/features/classifier";
+import { InputsForm, ResultPanel } from "@/features/classifier";
 import type { ClassifierInput, ClassifierResult } from "@/features/classifier";
 import type { PdfSection } from "./lib/exportPdf";
 import {
@@ -216,6 +209,22 @@ const writeScenarioB = (payload: any) => {
 function clamp(x: number, min = 0, max = 100) {
   return Math.max(min, Math.min(max, x));
 }
+
+function stable(obj: any): any {
+  if (Array.isArray(obj)) return obj.map(stable);
+  if (obj && typeof obj === "object") {
+    const out: any = {};
+    Object.keys(obj)
+      .sort()
+      .forEach((k) => {
+        out[k] = stable(obj[k]);
+      });
+    return out;
+  }
+  return obj;
+}
+const deepEqual = (a: any, b: any) =>
+  JSON.stringify(stable(a)) === JSON.stringify(stable(b));
 
 // Numeric scalers — tuned for reasonableness; adjust in future versions if needed.
 const scaleSkuCount = (n: number) => clamp((n / 2000) * 100); // 0 at 0, 100 at 2000+
@@ -423,22 +432,16 @@ function toCSV(rows: Record<string, any>[]) {
 
 // ---------- Main Component ----------
 export default function OnboardingClassifier() {
-  return (
-    <ClassifierProvider>
-      <OnboardingClassifierContent />
-    </ClassifierProvider>
-  );
+  return <OnboardingClassifierContent />;
 }
 
 function OnboardingClassifierContent() {
-  const { input, result, isBusy } = useClassifierState();
-  const { setInput, recalc } = useClassifierActions();
+  const [inputs, setInputs] = useState<ClassifierInput>(defaultInputs());
 
   const [gw, setGw] = useState<GroupWeights>(defaultGroupWeights());
   const [vw, setVw] = useState<VarWeights>(defaultVarWeights());
   const [th, setTh] = useState<Thresholds>(defaultThresholds());
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [inputInitialized, setInputInitialized] = useState(false);
 
   // Presets
   const [presets, setPresets] = useState<PresetRecord[]>([]);
@@ -450,14 +453,14 @@ function OnboardingClassifierContent() {
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
 
-  const toaster = useToaster();
+  const isBusy =
+    loadingPresets ||
+    isSavingPreset ||
+    isSavingChanges ||
+    isExportingPdf ||
+    isExportingCsv;
 
-  useEffect(() => {
-    if (!inputInitialized) {
-      setInput(defaultInputs());
-      setInputInitialized(true);
-    }
-  }, [inputInitialized, setInput]);
+  const toaster = useToaster();
 
   // === PRESET HELPERS — SINGLE SOURCE OF TRUTH ===
   const [lastAppliedSnapshot, setLastAppliedSnapshot] =
@@ -498,7 +501,7 @@ function OnboardingClassifierContent() {
   }
 
   function applySnapshot(snapshot: PresetSnapshot) {
-    setInput(snapshot.inputs);
+    setInputs(snapshot.inputs);
     setGw(snapshot.gw);
     setVw(snapshot.vw);
     setTh(snapshot.th);
@@ -515,6 +518,7 @@ function OnboardingClassifierContent() {
       return false;
     }
     applySnapshot(snapshot);
+    setPresetName(rec.name ?? "");
     if (announce) {
       toaster.show(`Toegepast: ${rec.name}`, "success");
     }
@@ -525,6 +529,7 @@ function OnboardingClassifierContent() {
     setSelectedPresetId(id);
     if (!id) {
       setLastAppliedSnapshot(null);
+      setPresetName("");
       return;
     }
     const rec = presets.find((p) => (p.id ?? p.name) === id);
@@ -543,7 +548,7 @@ function OnboardingClassifierContent() {
       toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
-    const payload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
+    const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
 
     setIsSavingPreset(true);
     toaster.show("Opslaan…", "info");
@@ -592,7 +597,7 @@ function OnboardingClassifierContent() {
       return;
     }
 
-    const payload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
+    const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
 
     setIsSavingChanges(true);
     toaster.show("Wijzigingen opslaan…", "info");
@@ -718,7 +723,7 @@ function OnboardingClassifierContent() {
         }[];
       }[] = [];
       (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-        const { groupScore, contributions } = computeGroupScore(g, input, vw);
+        const { groupScore, contributions } = computeGroupScore(g, inputs, vw);
         entries.push({ key: g, score: groupScore, contribs: contributions });
       });
       const total = entries.reduce(
@@ -739,7 +744,7 @@ function OnboardingClassifierContent() {
         totalScore: clamp(total),
         classification: cls,
       };
-    }, [input, gw, vw, th]);
+    }, [inputs, gw, vw, th]);
 
   const top3 = useMemo(() => {
     const ranked = contributionsAll
@@ -756,7 +761,7 @@ function OnboardingClassifierContent() {
     return ranked;
   }, [contributionsAll]);
 
-  const computedResult = useMemo<ClassifierResult>(() => {
+  const result = useMemo<ClassifierResult>(() => {
     const classificationLabel = `${classification.code} — ${classification.lead}`;
     return {
       totalScoreLabel: totalScore.toFixed(1),
@@ -783,14 +788,13 @@ function OnboardingClassifierContent() {
     };
   }, [classification, groupScores, top3, totalScore]);
 
-  useEffect(() => {
-    if (result !== computedResult) {
-      recalc(computedResult);
-    }
-  }, [computedResult, recalc, result]);
+  // Handlers
+  const handleInputChange = (patch: Partial<Inputs>) => {
+    setInputs((prev) => ({ ...prev, ...patch }));
+  };
 
   function saveScenarioB() {
-    const payload = { name: scenarioName, inputs: input, gw, vw, th };
+    const payload = { name: scenarioName, inputs, gw, vw, th };
     writeScenarioB(payload);
     setOtherScenario(payload);
     toaster.show("Scenario B bewaard (sessie)", "success");
@@ -818,26 +822,26 @@ function OnboardingClassifierContent() {
         {
           title: "Operationele kenmerken",
           rows: [
-            toRow("Aantal SKU's", input.skuCount),
-            toRow("SKU-complexiteit", input.skuComplexity),
-            toRow("Ordervolume/mnd (gem.)", input.orderVolume),
-            toRow("Piekvolume", input.orderPeak),
-            toRow("Seizoensinvloeden", input.seizoensinvloed),
-            toRow("Retourpercentage", `${input.retourPercentage}%`),
-            toRow("VAS-activiteiten", selectedList(input.vasActiviteiten)),
+            toRow("Aantal SKU's", inputs.skuCount),
+            toRow("SKU-complexiteit", inputs.skuComplexity),
+            toRow("Ordervolume/mnd (gem.)", inputs.orderVolume),
+            toRow("Piekvolume", inputs.orderPeak),
+            toRow("Seizoensinvloeden", inputs.seizoensinvloed),
+            toRow("Retourpercentage", `${inputs.retourPercentage}%`),
+            toRow("VAS-activiteiten", selectedList(inputs.vasActiviteiten)),
             toRow(
               "Inbound bijzonderheden",
-              selectedList(input.inboundBijzonderheden),
+              selectedList(inputs.inboundBijzonderheden),
             ),
           ],
         },
         {
           title: "Technische integratie",
           rows: [
-            toRow("Platformtype", input.platformType),
-            toRow("Type koppeling", input.typeKoppeling),
-            toRow("PostNL API's", selectedList(input.postnlApis)),
-            toRow("Kanalen", input.verzendMethoden),
+            toRow("Platformtype", inputs.platformType),
+            toRow("Type koppeling", inputs.typeKoppeling),
+            toRow("PostNL API's", selectedList(inputs.postnlApis)),
+            toRow("Kanalen", inputs.verzendMethoden),
           ],
         },
       ];
@@ -869,7 +873,7 @@ function OnboardingClassifierContent() {
         class: classification.code,
         lead: classification.lead,
       };
-      Object.entries(input).forEach(([k, v]) => {
+      Object.entries(inputs).forEach(([k, v]) => {
         if (typeof v === "object" && v !== null) {
           row[k] = Object.entries(v as any)
             .filter(([, on]) => !!on)
@@ -902,7 +906,7 @@ function OnboardingClassifierContent() {
   };
 
   function resetAll() {
-    setInput(defaultInputs());
+    setInputs(defaultInputs());
     setGw(defaultGroupWeights());
     setVw(defaultVarWeights());
     setTh(defaultThresholds());
@@ -916,19 +920,13 @@ function OnboardingClassifierContent() {
     toaster.show("Alles gereset (A + B)", "info");
   }
 
-  const currentPayload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
   const trimmedPresetName = (presetName ?? "").trim();
   const canSaveNewPreset = trimmedPresetName.length >= 3;
-  const currentSnapshot = {
-    inputs: currentPayload.inputs,
-    gw: currentPayload.gw,
-    vw: currentPayload.vw,
-    th: currentPayload.th,
-  };
+  const currentSnapshot = { inputs, gw, vw, th };
   const isDirty =
     !!selectedPresetId &&
     !!lastAppliedSnapshot &&
-    JSON.stringify(currentSnapshot) !== JSON.stringify(lastAppliedSnapshot);
+    !deepEqual(currentSnapshot, lastAppliedSnapshot);
 
   // ---------- Render ----------
   return (
@@ -1018,7 +1016,8 @@ function OnboardingClassifierContent() {
       <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}>
         {/* Left: Inputs */}
         <div>
-          <InputsForm />
+         <InputsForm />
+
           <div style={{ ...card, ...section }}>
             <h2 style={h2}>Group weights</h2>
             <div style={grid3}>
@@ -1112,7 +1111,7 @@ function OnboardingClassifierContent() {
               </div>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                  {otherScenario?.label ?? "Scenario B (geen)"}
+                  {otherScenario?.name ?? "Scenario B (geen)"}
                 </div>
                 {otherScenario ? (
                   <>
