@@ -20,8 +20,16 @@ Features
 */
 
 import React, { useEffect, useMemo, useState } from "react";
-import { InputsForm, ResultPanel } from "@/features/classifier";
-import type { ClassifierInput, ClassifierResult } from "@/features/classifier";
+import {
+  HeaderBar,
+  InputsForm,
+  ResultPanel,
+  PresetsCard,
+  computeScore,
+  useClassifierState,
+} from "@/features/classifier";
+import type { ClassifierInput, ClassifierResult } from "@/features/classifier"; // ← deze regel erbij
+
 import type { PdfSection } from "./lib/exportPdf";
 import {
   loadPresets,
@@ -33,7 +41,8 @@ import {
 } from "./lib/presets";
 import { useToaster } from "./components/ui/Toaster";
 import { btnPrimary, btnSecondary } from "./ui/buttons";
-import PresetsCard from "./features/classifier/components/PresetsCard";
+
+
 
 type MultiOptions = Record<string, boolean>;
 
@@ -789,9 +798,6 @@ function OnboardingClassifierContent() {
   }, [classification, groupScores, top3, totalScore]);
 
   // Handlers
-  const handleInputChange = (patch: Partial<Inputs>) => {
-    setInputs((prev) => ({ ...prev, ...patch }));
-  };
 
   function saveScenarioB() {
     const payload = { name: scenarioName, inputs, gw, vw, th };
@@ -929,6 +935,7 @@ function OnboardingClassifierContent() {
     !deepEqual(currentSnapshot, lastAppliedSnapshot);
 
   // ---------- Render ----------
+  const { input } = useClassifierState();
   return (
     <div
       style={{
@@ -1034,8 +1041,8 @@ function OnboardingClassifierContent() {
                     step={0.01}
                     value={gw[key]}
                     onChange={(e) =>
-                      setGw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-                    }
+  setGw((prev: GroupWeights) => ({ ...prev, [key]: Number(e.target.value) }))
+}
                   />
                 </div>
               ))}
@@ -1063,8 +1070,8 @@ function OnboardingClassifierContent() {
                     step={0.01}
                     value={vw[key]}
                     onChange={(e) =>
-                      setVw((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-                    }
+  setVw((prev: VarWeights) => ({ ...prev, [key]: Number(e.target.value) }))
+}
                   />
                 </div>
               ))}
@@ -1084,8 +1091,8 @@ function OnboardingClassifierContent() {
                     max={100}
                     value={th[key]}
                     onChange={(e) =>
-                      setTh((prev) => ({ ...prev, [key]: Number(e.target.value) }))
-                    }
+  setTh((prev: Thresholds) => ({ ...prev, [key]: Number(e.target.value) }))
+}
                   />
                 </div>
               ))}
