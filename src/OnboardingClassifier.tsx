@@ -27,8 +27,8 @@ import {
   PresetsCard,
   computeScore,
   useClassifierState,
+    useClassifierActions,
 } from "@/features/classifier";
-import type { ClassifierInput, ClassifierResult } from "@/features/classifier"; // ← deze regel erbij
 
 import type { PdfSection } from "./lib/exportPdf";
 import {
@@ -50,7 +50,32 @@ type MultiOptions = Record<string, boolean>;
 
 type NumDict = Record<string, number>;
 
-type Inputs = ClassifierInput;
+interface Inputs {
+  skuCount: number;
+  orderVolume: number;
+  orderPeak: number;
+  retourPercentage: number;
+  aantalAfdelingen: number;
+  skuComplexity: string;
+  seizoensinvloed: string;
+  platformType: string;
+  typeKoppeling: string;
+  configDoor: string;
+  mateMaatwerk: string;
+  mappingComplexiteit: string;
+  testCapaciteit: string;
+  voorraadBeheer: string;
+  replenishment: string;
+  verzendMethoden: string;
+  retourProces: string;
+  dashboardGebruik: string;
+  rapportageBehoefte: string;
+  serviceUitbreiding: string;
+  scopeWijzigingen: string;
+  vasActiviteiten: MultiOptions;
+  inboundBijzonderheden: MultiOptions;
+  postnlApis: MultiOptions;
+}
 
 type PresetSnapshot = {
   inputs: Inputs;
@@ -454,7 +479,7 @@ export default function OnboardingClassifier() {
 }
 
 function OnboardingClassifierContent() {
-  const [inputs, setInputs] = useState<ClassifierInput>(defaultInputs());
+  const { setInput } = useClassifierActions();
 
   const [gw, setGw] = useState<GroupWeights>(defaultGroupWeights());
   const [vw, setVw] = useState<VarWeights>(defaultVarWeights());
@@ -470,6 +495,8 @@ function OnboardingClassifierContent() {
   const [isSavingChanges, setIsSavingChanges] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
+    const { input } = useClassifierState();
+  const result = useMemo(() => computeScore(input), [input]);
 
   const isBusy =
     loadingPresets ||
@@ -483,6 +510,10 @@ function OnboardingClassifierContent() {
   // === PRESET HELPERS — SINGLE SOURCE OF TRUTH ===
   const [lastAppliedSnapshot, setLastAppliedSnapshot] =
     useState<PresetSnapshot | null>(null);
+
+      useEffect(() => {
+    setInput(defaultInputs());
+  }, [setInput]);
 
   const activePreset = useMemo(
     () => presets.find((p) => (p.id ?? p.name) === selectedPresetId) ?? null,
@@ -519,7 +550,7 @@ function OnboardingClassifierContent() {
   }
 
   function applySnapshot(snapshot: PresetSnapshot) {
-    setInputs(snapshot.inputs);
+    setInput(snapshot.inputs);
     setGw(snapshot.gw);
     setVw(snapshot.vw);
     setTh(snapshot.th);
@@ -566,7 +597,7 @@ function OnboardingClassifierContent() {
       toaster.show("Naam te kort (minimaal 3 tekens)", "error");
       return;
     }
-    const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
+    const payload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
 
     setIsSavingPreset(true);
     toaster.show("Opslaan…", "info");
@@ -615,7 +646,7 @@ function OnboardingClassifierContent() {
       return;
     }
 
-    const payload: PresetPayload = { inputs, gw, vw, th, label: "v1.0.2" };
+   const payload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
 
     setIsSavingChanges(true);
     toaster.show("Wijzigingen opslaan…", "info");
@@ -728,7 +759,7 @@ function OnboardingClassifierContent() {
   const groupWarning = Math.abs(1 - groupSum) > 0.0001;
 
   // Compute scores per group and total
-  const { groupScores, contributionsAll, totalScore, classification } =
+  const { groupScores, totalScore, classification } =
     useMemo(() => {
       const entries: {
         key: GroupKey;
@@ -741,75 +772,26 @@ function OnboardingClassifierContent() {
         }[];
       }[] = [];
       (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-        const { groupScore, contributions } = computeGroupScore(g, inputs, vw);
+        const { groupScore, contributions } = computeGroupScore(g, input, vw);
         entries.push({ key: g, score: groupScore, contribs: contributions });
       });
       const total = entries.reduce(
         (acc, e) => acc + e.score * (gw as any)[e.key],
         0,
       );
-      const contribs = entries.flatMap((e) =>
-        e.contribs.map((c) => ({
-          ...c,
-          group: e.key,
-          groupWeight: (gw as any)[e.key],
-        })),
-      );
+
       const cls = classify(total * 1, th);
       return {
         groupScores: entries,
-        contributionsAll: contribs,
         totalScore: clamp(total),
         classification: cls,
       };
-    }, [inputs, gw, vw, th]);
-
-  const top3 = useMemo(() => {
-    const ranked = contributionsAll
-      .map((c) => ({
-        key: c.key,
-        group: c.group,
-        score: c.score,
-        weight: c.weight,
-        groupWeight: c.groupWeight,
-        absContribution: Math.abs(c.score * c.weight * c.groupWeight),
-      }))
-      .sort((a, b) => b.absContribution - a.absContribution)
-      .slice(0, 3);
-    return ranked;
-  }, [contributionsAll]);
-
-  const result = useMemo<ClassifierResult>(() => {
-    const classificationLabel = `${classification.code} — ${classification.lead}`;
-    return {
-      totalScoreLabel: totalScore.toFixed(1),
-      totalScoreProgress: clamp(totalScore),
-      classification: {
-        code: classification.code,
-        lead: classification.lead,
-        color: classification.color,
-        label: classificationLabel,
-      },
-      topContributors: top3.map((item) => ({
-        key: item.key,
-        title: item.key,
-        detail: `Score ${item.score.toFixed(1)} • gewicht ${item.weight.toFixed(
-          2,
-        )} • groep ${item.group} (${item.groupWeight.toFixed(2)})`,
-      })),
-      groupScores: groupScores.map((gs) => ({
-        key: gs.key,
-        title: gs.key,
-        scoreLabel: gs.score.toFixed(1),
-        progress: clamp(gs.score),
-      })),
-    };
-  }, [classification, groupScores, top3, totalScore]);
+    }, [input, gw, vw, th]);
 
   // Handlers
 
   function saveScenarioB() {
-    const payload = { name: scenarioName, inputs, gw, vw, th };
+    const payload = { name: scenarioName, inputs: input, gw, vw, th };
     writeScenarioB(payload);
     setOtherScenario(payload);
     toaster.show("Scenario B bewaard (sessie)", "success");
@@ -837,26 +819,26 @@ function OnboardingClassifierContent() {
         {
           title: "Operationele kenmerken",
           rows: [
-            toRow("Aantal SKU's", inputs.skuCount),
-            toRow("SKU-complexiteit", inputs.skuComplexity),
-            toRow("Ordervolume/mnd (gem.)", inputs.orderVolume),
-            toRow("Piekvolume", inputs.orderPeak),
-            toRow("Seizoensinvloeden", inputs.seizoensinvloed),
-            toRow("Retourpercentage", `${inputs.retourPercentage}%`),
-            toRow("VAS-activiteiten", selectedList(inputs.vasActiviteiten)),
+            toRow("Aantal SKU's", input.skuCount),
+            toRow("SKU-complexiteit", input.skuComplexity),
+            toRow("Ordervolume/mnd (gem.)", input.orderVolume),
+            toRow("Piekvolume", input.orderPeak),
+            toRow("Seizoensinvloeden", input.seizoensinvloed),
+            toRow("Retourpercentage", `${input.retourPercentage}%`),
+            toRow("VAS-activiteiten", selectedList(input.vasActiviteiten)),
             toRow(
               "Inbound bijzonderheden",
-              selectedList(inputs.inboundBijzonderheden),
+              selectedList(input.inboundBijzonderheden),
             ),
           ],
         },
         {
           title: "Technische integratie",
           rows: [
-            toRow("Platformtype", inputs.platformType),
-            toRow("Type koppeling", inputs.typeKoppeling),
-            toRow("PostNL API's", selectedList(inputs.postnlApis)),
-            toRow("Kanalen", inputs.verzendMethoden),
+            toRow("Platformtype", input.platformType),
+            toRow("Type koppeling", input.typeKoppeling),
+            toRow("PostNL API's", selectedList(input.postnlApis)),
+            toRow("Kanalen", input.verzendMethoden),
           ],
         },
       ];
@@ -888,7 +870,7 @@ function OnboardingClassifierContent() {
         class: classification.code,
         lead: classification.lead,
       };
-      Object.entries(inputs).forEach(([k, v]) => {
+      Object.entries(input).forEach(([k, v]) => {
         if (typeof v === "object" && v !== null) {
           row[k] = Object.entries(v as any)
             .filter(([, on]) => !!on)
@@ -921,7 +903,7 @@ function OnboardingClassifierContent() {
   };
 
   function resetAll() {
-    setInputs(defaultInputs());
+    setInput(defaultInputs());
     setGw(defaultGroupWeights());
     setVw(defaultVarWeights());
     setTh(defaultThresholds());
@@ -935,25 +917,17 @@ function OnboardingClassifierContent() {
     toaster.show("Alles gereset (A + B)", "info");
   }
 
+    // ---------- Render ----------
   const trimmedPresetName = (presetName ?? "").trim();
   const canSaveNewPreset = trimmedPresetName.length >= 3;
-  const currentSnapshot = { inputs, gw, vw, th };
+  const currentSnapshot = { inputs: input, gw, vw, th };
   const isDirty =
     !!selectedPresetId &&
     !!lastAppliedSnapshot &&
     !deepEqual(currentSnapshot, lastAppliedSnapshot);
 
-  // ---------- Render ----------
-  const { input } = useClassifierState();
   return (
-    <div
-      style={{
-        maxWidth: 1200,
-        margin: "24px auto",
-        padding: 16,
-        fontFamily: "Inter, ui-sans-serif, system-ui, -apple-system",
-      }}
-    >
+    <div className="oc-container">
       <div
         style={{
           display: "flex",
@@ -1029,10 +1003,10 @@ function OnboardingClassifierContent() {
       {/* --- EINDE PRESETS CARD --- */}
 
       {/* Layout */}
-      <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: 16 }}>
+      <div className="oc-grid">
         {/* Left: Inputs */}
         <div>
-         <InputsForm />
+          <InputsForm />
 
           <div style={{ ...card, ...section }}>
             <h2 style={h2}>Group weights</h2>

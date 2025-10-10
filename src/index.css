@@ -58,3 +58,72 @@ button {
 button:hover {
   filter: brightness(0.98);
 }
+
+
+/* ---- Onboarding Classifier field layout ---- */
+.oc-section {
+  padding: 12px;
+}
+
+.oc-fieldgrid {
+  display: grid;
+  gap: 16px;
+}
+@media (min-width: 992px) {
+  .oc-fieldgrid {
+    grid-template-columns: 1fr 1fr; /* two equal columns */
+    align-items: start;
+  }
+}
+
+.oc-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.oc-field label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.oc-field input,
+.oc-field select {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: #fff;
+}
+
+/* Neat wrapping checkbox rows */
+.checkgroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+}
+.checkgroup label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---- Centered layout fix ---- */
+.oc-container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  background: var(--background);
+}
+
+.oc-grid {
+  display: grid;
+  gap: 20px;
+}
+@media (min-width: 992px) {
+  .oc-grid {
+    grid-template-columns: 1.2fr 0.8fr;
+    align-items: start;
+  }
+}
+

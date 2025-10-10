@@ -86,7 +86,7 @@ export default function PresetsCard({
   const presetValue = selectedPresetId ?? "";
 
   return (
-    <div data-id="presets-card" style={{ ...cardStyle, ...sectionStyle }}>
+    <div className="card" data-id="presets-card" style={{ ...cardStyle, ...sectionStyle }}>
       <h2 style={headingStyle}>Presets</h2>
       <div style={gridStyle}>
         <div>
