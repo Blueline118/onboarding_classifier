@@ -1,20 +1,9 @@
-import type { CSSProperties } from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, ChangeEvent } from "react";
+
 import type { PresetRecord } from "../../../lib/presets";
 import { btnDanger, btnPrimary, btnSecondary } from "../../../ui/buttons";
 
-/**
- * Props for {@link PresetsCard} supplied by the parent container.
- * - `presets` – lijst met beschikbare presets voor de dropdown.
- * - `selectedPresetId` – huidig gekozen preset-ID of `null` wanneer geen selectie.
- * - `onSelectPreset` – handler wanneer een andere preset gekozen wordt (ook "geen").
- * - `name` / `onNameChange` – gecontroleerde state voor het naamveld.
- * - `onSave`, `canSave`, `isSavingPreset` – acties/status voor een nieuwe preset.
- * - `loadingPresets` – vlag die aangeeft dat presets opgehaald worden.
- * - `onApply` – toepassen van de geselecteerde preset.
- * - `onDelete` – optionele verwijderactie voor de huidige preset.
- * - `onRefresh` – opnieuw laden van de presetslijst.
- * - `isDirty`, `onSaveChanges`, `isSavingChanges` – wijzigingsindicator en actie.
- */
 export type PresetsCardProps = {
   presets: PresetRecord[];
   selectedPresetId: string | null;
@@ -32,7 +21,6 @@ export type PresetsCardProps = {
   onSaveChanges: () => void;
   isSavingChanges: boolean;
 };
-
 
 const sectionStyle: CSSProperties = { marginBottom: 24 };
 const cardStyle: CSSProperties = {
@@ -81,12 +69,42 @@ export default function PresetsCard({
   isDirty,
   onSaveChanges,
   isSavingChanges,
-}: PresetsCardProps) {
-  const disableApply = !selectedPresetId;
-  const presetValue = selectedPresetId ?? "";
+}: PresetsCardProps): JSX.Element {
+  const [mounted, setMounted] = useState(false);
+  const [localName, setLocalName] = useState(name);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    setLocalName(name);
+  }, [name]);
+
+  useEffect(() => {
+    if (localName !== name) {
+      onNameChange(localName);
+    }
+  }, [localName, name, onNameChange]);
+
+  const disableApply = useMemo(() => !selectedPresetId, [selectedPresetId]);
+  const presetValue = useMemo(() => selectedPresetId ?? "", [selectedPresetId]);
+
+  const handleNameChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setLocalName(event.target.value);
+  };
+
+  const handleSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    onSelectPreset(event.target.value);
+  };
 
   return (
-    <div className="card" data-id="presets-card" style={{ ...cardStyle, ...sectionStyle }}>
+    <div
+      className="card"
+      data-mounted={mounted}
+      data-id="presets-card"
+      style={{ ...cardStyle, ...sectionStyle }}
+    >
       <h2 style={headingStyle}>Presets</h2>
       <div style={gridStyle}>
         <div>
@@ -94,8 +112,8 @@ export default function PresetsCard({
           <input
             style={inputStyle}
             placeholder="Bijv. Klant X – Q4"
-            value={name}
-            onChange={(e) => onNameChange(e.target.value)}
+            value={localName}
+            onChange={handleNameChange}
           />
           <button
             onClick={onSave}
@@ -117,15 +135,11 @@ export default function PresetsCard({
           <label style={labelStyle}>
             Gekozen preset {loadingPresets ? "(laden…)" : ""}
           </label>
-          <select
-            style={inputStyle}
-            value={presetValue}
-            onChange={(e) => onSelectPreset(e.target.value)}
-          >
+          <select style={inputStyle} value={presetValue} onChange={handleSelectChange}>
             <option value="">— kies preset —</option>
-            {presets.map((p) => (
-              <option key={p.id ?? p.name} value={p.id ?? p.name}>
-                {p.name}
+            {presets.map((preset) => (
+              <option key={preset.id ?? preset.name} value={preset.id ?? preset.name}>
+                {preset.name}
               </option>
             ))}
           </select>
@@ -151,7 +165,7 @@ export default function PresetsCard({
               >
                 Toepassen
               </button>
-              {onDelete && (
+              {onDelete ? (
                 <button
                   onClick={onDelete}
                   disabled={disableApply}
@@ -162,17 +176,12 @@ export default function PresetsCard({
                 >
                   Verwijderen
                 </button>
-              )}
-              <button
-                onClick={onRefresh}
-                style={{
-                  ...btnSecondary,
-                }}
-              >
+              ) : null}
+              <button onClick={onRefresh} style={{ ...btnSecondary }}>
                 Vernieuwen
               </button>
             </div>
-            {isDirty && (
+              {isDirty ? (
               <button
                 onClick={onSaveChanges}
                 disabled={isSavingChanges}
@@ -185,7 +194,7 @@ export default function PresetsCard({
               >
                 {isSavingChanges ? "Bezig..." : "Wijzigingen opslaan"}
               </button>
-            )}
+            ) : null}
           </div>
         </div>
       </div>

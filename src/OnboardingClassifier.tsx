@@ -1,88 +1,36 @@
-/*
-OnboardingClassifier v1.0.0 — Single-file React + TypeScript component
-Usage (CodeSandbox React + TypeScript template):
-  1) Create file: OnboardingClassifier.tsx and paste this entire content.
-  2) In App.tsx:
-       import OnboardingClassifier from "./OnboardingClassifier";
-       export default function App(){ return <OnboardingClassifier/> }
-  3) No Tailwind required. Uses inline styles only.
-
-Features
-- Inputs: numeric, dropdowns, multi-select checkboxes (Dutch labels)
-- Editable group weights (must sum to 1.0) + warning
-- Advanced per-variable weights editor
-- Deterministic scoring 0..100 → Classification (A1–C1) + lead time
-- Editable thresholds
-- Result card with progress bar + top-3 contributors
-- Scenario compare (A/B) via localStorage, side-by-side
-- Export CSV (inputs + group scores + total + class + lead time)
-- Reset to defaults
-*/
-
 import React, { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, ChangeEvent } from "react";
+
 import {
   HeaderBar,
   InputsForm,
-  ResultPanel,
   PresetsCard,
+  ResultPanel,
   computeScore,
+  useClassifierActions,
   useClassifierState,
-    useClassifierActions,
+} from "@/features/classifier";
+import type {
+  ClassifierInput as Inputs,
+  ClassifierResult,
+  MultiOptions,
 } from "@/features/classifier";
 
 import type { PdfSection } from "./lib/exportPdf";
 import {
+  deletePreset,
   loadPresets,
   savePreset,
-  deletePreset,
   updatePreset,
-  type PresetRecord,
   type PresetPayload,
+  type PresetRecord,
 } from "./lib/presets";
 import { useToaster } from "./components/ui/Toaster";
 import { btnPrimary, btnSecondary } from "./ui/buttons";
 
-
-
-type MultiOptions = Record<string, boolean>;
-
 // ---------- Types ----------
 
 type NumDict = Record<string, number>;
-
-interface Inputs {
-  skuCount: number;
-  orderVolume: number;
-  orderPeak: number;
-  retourPercentage: number;
-  aantalAfdelingen: number;
-  skuComplexity: string;
-  seizoensinvloed: string;
-  platformType: string;
-  typeKoppeling: string;
-  configDoor: string;
-  mateMaatwerk: string;
-  mappingComplexiteit: string;
-  testCapaciteit: string;
-  voorraadBeheer: string;
-  replenishment: string;
-  verzendMethoden: string;
-  retourProces: string;
-  dashboardGebruik: string;
-  rapportageBehoefte: string;
-  serviceUitbreiding: string;
-  scopeWijzigingen: string;
-  vasActiviteiten: MultiOptions;
-  inboundBijzonderheden: MultiOptions;
-  postnlApis: MultiOptions;
-}
-
-type PresetSnapshot = {
-  inputs: Inputs;
-  gw: GroupWeights;
-  vw: VarWeights;
-  th: Thresholds;
-};
 
 type GroupWeights = {
   operationeel: number;
@@ -95,17 +43,15 @@ type GroupWeights = {
 };
 
 type Thresholds = {
-  A1: number; // upper bound inclusive for A1
+  A1: number;
   A2: number;
   A3: number;
   B1: number;
   B2: number;
-  C1: number; // 100
+  C1: number;
 };
 
-// Variable-level weights per group
 interface VarWeights {
-  // operationeel
   skuCount: number;
   orderVolume: number;
   orderPeak: number;
@@ -114,29 +60,30 @@ interface VarWeights {
   seizoensinvloed: number;
   vasActiviteiten: number;
   inboundBijzonderheden: number;
-  // technisch
   platformType: number;
   typeKoppeling: number;
   postnlApis: number;
-  // configuratie
   configDoor: number;
   mateMaatwerk: number;
   mappingComplexiteit: number;
   testCapaciteit: number;
-  // organisatie
   aantalAfdelingen: number;
   scopeWijzigingen: number;
-  // processen
   voorraadBeheer: number;
   replenishment: number;
   verzendMethoden: number;
   retourProces: number;
-  // rapportage
   dashboardGebruik: number;
   rapportageBehoefte: number;
-  // contract
   serviceUitbreiding: number;
 }
+
+type PresetSnapshot = {
+  inputs: Inputs;
+  gw: GroupWeights;
+  vw: VarWeights;
+  th: Thresholds;
+};
 
 // ---------- Defaults ----------
 
@@ -222,52 +169,75 @@ const defaultThresholds = (): Thresholds => ({
   C1: 100,
 });
 
-const SC_B_KEY = "onb_scenario_b";
-const readScenarioB = () => {
-  try {
-    const raw = sessionStorage.getItem(SC_B_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
+// ---------- UI styles ----------
+
+const SCENARIO_B_KEY = "onb_scenario_b";
+
+const sectionStyle: CSSProperties = { marginBottom: 24 };
+const cardStyle: CSSProperties = {
+  background: "var(--card)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius)",
+  padding: 16,
+  boxShadow: "var(--shadow)",
 };
-const writeScenarioB = (payload: any) => {
-  try {
-    sessionStorage.setItem(SC_B_KEY, JSON.stringify(payload));
-  } catch {}
+const labelStyle: CSSProperties = {
+  fontSize: 13,
+  color: "var(--muted)",
+  marginBottom: 6,
+  display: "block",
+};
+const inputStyle: CSSProperties = {
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: 8,
+  border: "1px solid var(--border)",
+  background: "#fff",
+};
+const gridTwoStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr",
+  gap: 16,
+};
+const gridThreeStyle: CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "1fr 1fr 1fr",
+  gap: 16,
+};
+const headingStyle: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 700,
+  margin: "0 0 10px",
+  color: "#111827",
+};
+const smallTextStyle: CSSProperties = { fontSize: 12, color: "var(--muted)" };
+
+// ---------- Helpers ----------
+
+const clamp = (value: number, min = 0, max = 100) => Math.max(min, Math.min(max, value));
+
+const stable = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map((v) => stable(v));
+  if (value && typeof value === "object") {
+    const keys = Object.keys(value as Record<string, unknown>).sort();
+    return keys.reduce<Record<string, unknown>>((acc, k) => {
+      acc[k] = stable((value as Record<string, unknown>)[k]);
+      return acc;
+    }, {});
+  }
+  return value;
 };
 
-// ---------- Helpers: normalization mappings (0..100) ----------
-// We keep mappings simple and documented for transparency.
+const deepEqual = (a: unknown, b: unknown) => JSON.stringify(stable(a)) === JSON.stringify(stable(b));
 
-function clamp(x: number, min = 0, max = 100) {
-  return Math.max(min, Math.min(max, x));
-}
+// Numeric scalers
+const scaleSkuCount = (n: number) => clamp((n / 2000) * 100);
+const scaleOrderVolume = (n: number) => clamp((n / 20000) * 100);
+const scaleOrderPeak = (n: number) => clamp((n / 40000) * 100);
+const scaleRetourPercentage = (n: number) => clamp(n);
+const scaleAfdelingen = (n: number) => clamp(((n - 1) / 6) * 100);
 
-function stable(obj: any): any {
-  if (Array.isArray(obj)) return obj.map(stable);
-  if (obj && typeof obj === "object") {
-    const out: any = {};
-    Object.keys(obj)
-      .sort()
-      .forEach((k) => {
-        out[k] = stable(obj[k]);
-      });
-    return out;
-  }
-  return obj;
-}
-const deepEqual = (a: any, b: any) =>
-  JSON.stringify(stable(a)) === JSON.stringify(stable(b));
-
-// Numeric scalers — tuned for reasonableness; adjust in future versions if needed.
-const scaleSkuCount = (n: number) => clamp((n / 2000) * 100); // 0 at 0, 100 at 2000+
-const scaleOrderVolume = (n: number) => clamp((n / 20000) * 100); // 100 at 20k/mo
-const scaleOrderPeak = (n: number) => clamp((n / 40000) * 100); // 100 at 40k in piekmaand
-const scaleRetourPct = (n: number) => clamp(n); // already 0..100
-const scaleAfdelingen = (n: number) => clamp(((n - 1) / 6) * 100); // 1..7 depts → 0..100
-
-// Dropdown categorical → score 0..100 (higher = complexer)
+// Categorical maps
 const mapSkuComplexity: NumDict = { standaard: 10, varianten: 50, bundels: 80 };
 const mapSeizoen: NumDict = { laag: 10, medium: 45, hoog: 80 };
 const mapPlatform: NumDict = {
@@ -284,24 +254,23 @@ const mapMaatwerk: NumDict = { geen: 10, licht: 45, zwaar: 85 };
 const mapMapping: NumDict = { standaard: 20, custom: 60, dynamisch: 80 };
 const mapTestCap: NumDict = { laag: 80, gemiddeld: 45, hoog: 20 };
 const mapVoorraad: NumDict = { realtime: 30, batch: 55, handmatig: 85 };
-const mapRepl: NumDict = { geautomatiseerd: 30, periodiek: 55, handmatig: 80 };
+const mapReplenishment: NumDict = { geautomatiseerd: 30, periodiek: 55, handmatig: 80 };
 const mapVerzend: NumDict = { standaard: 25, maatwerk: 65, externe: 75 };
-const mapRetourProc: NumDict = { portaal: 35, handmatig: 75 };
-const mapDashUse: NumDict = { dagelijks: 20, wekelijks: 45, zelden: 70 };
-const mapRapport: NumDict = { standaard: 30, uitgebreid: 55, maatwerk: 80 };
-const mapServiceExp: NumDict = { nee: 30, ja: 75 };
+const mapRetourProces: NumDict = { portaal: 35, handmatig: 75 };
+const mapDashboard: NumDict = { dagelijks: 20, wekelijks: 45, zelden: 70 };
+const mapRapportage: NumDict = { standaard: 30, uitgebreid: 55, maatwerk: 80 };
+const mapService: NumDict = { nee: 30, ja: 75 };
 const mapScope: NumDict = { weinig: 30, gemiddeld: 55, veel: 80 };
 
-// Multi-select contribution: fraction of selected options * 100
-const scaleMulti = (opts: MultiOptions) => {
-  const keys = Object.keys(opts);
+const scaleMulti = (options: MultiOptions) => {
+  const keys = Object.keys(options ?? {});
   if (!keys.length) return 0;
-  const selected = keys.filter((k) => !!opts[k]).length;
-  return clamp((selected / keys.length) * 100);
+  const active = keys.filter((k) => Boolean(options?.[k])).length;
+  return clamp((active / keys.length) * 100);
 };
 
-// ---------- Group assignments (which variables belong to which group) ----------
-const groupVars = {
+// Group definitions
+const groupVariables = {
   operationeel: [
     "skuCount",
     "orderVolume",
@@ -320,173 +289,145 @@ const groupVars = {
   contract: ["serviceUitbreiding"],
 } as const;
 
-type GroupKey = keyof typeof groupVars;
+type GroupKey = keyof typeof groupVariables;
 
-// ---------- Compute normalized variable scores (0..100) ----------
-function variableScore(key: keyof VarWeights, v: Inputs): number {
+type GroupComputation = {
+  key: GroupKey;
+  score: number;
+  contributions: Array<{ key: string; score: number; weight: number; contribution: number }>;
+};
+
+const variableScore = (key: keyof VarWeights, input: Inputs): number => {
   switch (key) {
     case "skuCount":
-      return scaleSkuCount(v.skuCount);
+      return scaleSkuCount(input.skuCount);
     case "orderVolume":
-      return scaleOrderVolume(v.orderVolume);
+      return scaleOrderVolume(input.orderVolume);
     case "orderPeak":
-      return scaleOrderPeak(v.orderPeak);
+      return scaleOrderPeak(input.orderPeak);
     case "retourPercentage":
-      return scaleRetourPct(v.retourPercentage);
+      return scaleRetourPercentage(input.retourPercentage);
     case "aantalAfdelingen":
-      return scaleAfdelingen(v.aantalAfdelingen);
+      return scaleAfdelingen(input.aantalAfdelingen);
 
     case "skuComplexity":
-      return mapSkuComplexity[v.skuComplexity] ?? 40;
+      return mapSkuComplexity[input.skuComplexity] ?? 40;
     case "seizoensinvloed":
-      return mapSeizoen[v.seizoensinvloed] ?? 45;
+      return mapSeizoen[input.seizoensinvloed] ?? 45;
     case "platformType":
-      return mapPlatform[v.platformType] ?? 50;
+      return mapPlatform[input.platformType] ?? 50;
     case "typeKoppeling":
-      return mapKoppeling[v.typeKoppeling] ?? 50;
+      return mapKoppeling[input.typeKoppeling] ?? 50;
     case "configDoor":
-      return mapConfigDoor[v.configDoor] ?? 50;
+      return mapConfigDoor[input.configDoor] ?? 50;
     case "mateMaatwerk":
-      return mapMaatwerk[v.mateMaatwerk] ?? 50;
+      return mapMaatwerk[input.mateMaatwerk] ?? 50;
     case "mappingComplexiteit":
-      return mapMapping[v.mappingComplexiteit] ?? 50;
+      return mapMapping[input.mappingComplexiteit] ?? 50;
     case "testCapaciteit":
-      return mapTestCap[v.testCapaciteit] ?? 50;
+      return mapTestCap[input.testCapaciteit] ?? 50;
     case "voorraadBeheer":
-      return mapVoorraad[v.voorraadBeheer] ?? 50;
+      return mapVoorraad[input.voorraadBeheer] ?? 50;
     case "replenishment":
-      return mapRepl[v.replenishment] ?? 50;
+      return mapReplenishment[input.replenishment] ?? 50;
     case "verzendMethoden":
-      return mapVerzend[v.verzendMethoden] ?? 50;
+      return mapVerzend[input.verzendMethoden] ?? 50;
     case "retourProces":
-      return mapRetourProc[v.retourProces] ?? 55;
+      return mapRetourProces[input.retourProces] ?? 55;
     case "dashboardGebruik":
-      return mapDashUse[v.dashboardGebruik] ?? 45;
+      return mapDashboard[input.dashboardGebruik] ?? 45;
     case "rapportageBehoefte":
-      return mapRapport[v.rapportageBehoefte] ?? 55;
+      return mapRapportage[input.rapportageBehoefte] ?? 55;
     case "serviceUitbreiding":
-      return mapServiceExp[v.serviceUitbreiding] ?? 30;
+      return mapService[input.serviceUitbreiding] ?? 30;
 
     case "vasActiviteiten":
-      return scaleMulti(v.vasActiviteiten);
+      return scaleMulti(input.vasActiviteiten);
     case "inboundBijzonderheden":
-      return scaleMulti(v.inboundBijzonderheden);
+      return scaleMulti(input.inboundBijzonderheden);
     case "postnlApis":
-      return clamp(100 - scaleMulti(v.postnlApis)); // meer PostNL API’s verlaagt complexiteit
+      return clamp(100 - scaleMulti(input.postnlApis));
 
     case "scopeWijzigingen":
-      return mapScope[v.scopeWijzigingen] ?? 55;
+      return mapScope[input.scopeWijzigingen] ?? 55;
     default:
       return 50;
   }
-}
+};
 
-// Compute group score and contributions per variable
-function computeGroupScore(group: GroupKey, inputs: Inputs, varW: VarWeights) {
-  // NIEUW — leesbare readonly array
-  const vars = groupVars[group] as ReadonlyArray<keyof VarWeights>;
-
-  let totalW = 0;
-  let sum = 0;
-  const contributions: {
-    key: string;
-    score: number;
-    weight: number;
-    contribution: number;
-  }[] = [];
-  vars.forEach((k) => {
-    const s = variableScore(k, inputs);
-    const w = varW[k];
-    totalW += w;
-    sum += s * w;
-    contributions.push({ key: k, score: s, weight: w, contribution: s * w });
+const computeGroupScore = (
+  group: GroupKey,
+  input: Inputs,
+  weights: VarWeights,
+): { groupScore: number; contributions: GroupComputation["contributions"] } => {
+  const variables = groupVariables[group] as ReadonlyArray<keyof VarWeights>;
+  let weightedSum = 0;
+  let weightTotal = 0;
+  const contributions = variables.map((variable) => {
+    const score = variableScore(variable, input);
+    const weight = weights[variable];
+    weightedSum += score * weight;
+    weightTotal += weight;
+    return { key: variable, score, weight, contribution: score * weight };
   });
-  const groupScore = totalW > 0 ? sum / totalW : 0;
+  const groupScore = weightTotal > 0 ? weightedSum / weightTotal : 0;
   return { groupScore, contributions };
-}
+};
 
-function classify(score: number, th: Thresholds) {
-  const s = clamp(score);
-  if (s <= th.A1) return { code: "A1", lead: "2–3 weken", color: "#16a34a" };
-  if (s <= th.A2) return { code: "A2", lead: "3–4 weken", color: "#22c55e" };
-  if (s <= th.A3) return { code: "A3", lead: "4–6 weken", color: "#84cc16" };
-  if (s <= th.B1) return { code: "B1", lead: "4–5 weken", color: "#f59e0b" };
-  if (s <= th.B2) return { code: "B2", lead: "5–7 weken", color: "#f97316" };
+const classify = (score: number, thresholds: Thresholds) => {
+  const value = clamp(score);
+  if (value <= thresholds.A1) return { code: "A1", lead: "2–3 weken", color: "#16a34a" };
+  if (value <= thresholds.A2) return { code: "A2", lead: "3–4 weken", color: "#22c55e" };
+  if (value <= thresholds.A3) return { code: "A3", lead: "4–6 weken", color: "#84cc16" };
+  if (value <= thresholds.B1) return { code: "B1", lead: "4–5 weken", color: "#f59e0b" };
+  if (value <= thresholds.B2) return { code: "B2", lead: "5–7 weken", color: "#f97316" };
   return { code: "C1", lead: "8–12 weken", color: "#ef4444" };
-}
-
-// ---------- UI helpers ----------
-const section: React.CSSProperties = { marginBottom: 24 };
-
-const card: React.CSSProperties = {
-  background: "var(--card)",
-  border: "1px solid var(--border)",
-  borderRadius: "var(--radius)",
-  padding: 16,
-  boxShadow: "var(--shadow)",
 };
 
-const label: React.CSSProperties = {
-  fontSize: 13,
-  color: "var(--muted)",
-  marginBottom: 6,
-  display: "block",
+const readScenarioB = () => {
+  try {
+    const raw = sessionStorage.getItem(SCENARIO_B_KEY);
+    return raw ? (JSON.parse(raw) as PresetSnapshot & { name?: string }) : null;
+  } catch (error) {
+    console.error(error);
+    return null;
+  }
 };
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: 8,
-  border: "1px solid var(--border)",
-  background: "#fff",
+const writeScenarioB = (snapshot: PresetSnapshot & { name?: string }) => {
+  try {
+    sessionStorage.setItem(SCENARIO_B_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.error(error);
+  }
 };
-
-const grid2: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: 16,
-};
-
-const grid3: React.CSSProperties = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr 1fr",
-  gap: 16,
-};
-
-const h2: React.CSSProperties = {
-  fontSize: 18,
-  fontWeight: 700,
-  margin: "0 0 10px",
-  color: "#111827",
-};
-
-const small: React.CSSProperties = { fontSize: 12, color: "var(--muted)" };
-
 
 // ---------- CSV Export ----------
-function toCSV(rows: Record<string, any>[]) {
-  const headers = Array.from(new Set(rows.flatMap((r) => Object.keys(r))));
-  const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-  const lines = [headers.join(",")].concat(
-    rows.map((r) => headers.map((h) => esc(r[h])).join(","))
+
+const toCSV = (rows: Record<string, unknown>[]) => {
+  const headers = Array.from(new Set(rows.flatMap((row) => Object.keys(row))));
+  const escapeCell = (value: unknown) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+  const csvLines = [headers.join(",")].concat(
+    rows.map((row) => headers.map((header) => escapeCell(row[header])).join(",")),
   );
-  return lines.join("\n");
-}
+  return csvLines.join("\n");
+};
 
 // ---------- Main Component ----------
-export default function OnboardingClassifier() {
+
+export default function OnboardingClassifier(): JSX.Element {
   return <OnboardingClassifierContent />;
 }
 
-function OnboardingClassifierContent() {
+function OnboardingClassifierContent(): JSX.Element {
   const { setInput } = useClassifierActions();
+  const { input } = useClassifierState();
+  const toaster = useToaster();
 
-  const [gw, setGw] = useState<GroupWeights>(defaultGroupWeights());
-  const [vw, setVw] = useState<VarWeights>(defaultVarWeights());
-  const [th, setTh] = useState<Thresholds>(defaultThresholds());
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [groupWeights, setGroupWeights] = useState<GroupWeights>(defaultGroupWeights());
+  const [variableWeights, setVariableWeights] = useState<VarWeights>(defaultVarWeights());
+  const [thresholds, setThresholds] = useState<Thresholds>(defaultThresholds());
 
-  // Presets
   const [presets, setPresets] = useState<PresetRecord[]>([]);
   const [presetName, setPresetName] = useState("");
   const [selectedPresetId, setSelectedPresetId] = useState<string>("");
@@ -495,365 +436,305 @@ function OnboardingClassifierContent() {
   const [isSavingChanges, setIsSavingChanges] = useState(false);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
-    const { input } = useClassifierState();
-  const result = useMemo(() => computeScore(input), [input]);
+  const [lastAppliedSnapshot, setLastAppliedSnapshot] = useState<PresetSnapshot | null>(null);
+  const [scenarioName, setScenarioName] = useState("Scenario A");
+  const [otherScenario, setOtherScenario] = useState<(PresetSnapshot & { name?: string }) | null>(() => readScenarioB());
 
-  const isBusy =
-    loadingPresets ||
-    isSavingPreset ||
-    isSavingChanges ||
-    isExportingPdf ||
-    isExportingCsv;
-
-  const toaster = useToaster();
-
-  // === PRESET HELPERS — SINGLE SOURCE OF TRUTH ===
-  const [lastAppliedSnapshot, setLastAppliedSnapshot] =
-    useState<PresetSnapshot | null>(null);
-
-      useEffect(() => {
+  useEffect(() => {
     setInput(defaultInputs());
   }, [setInput]);
 
-  const activePreset = useMemo(
-    () => presets.find((p) => (p.id ?? p.name) === selectedPresetId) ?? null,
-    [presets, selectedPresetId],
-  );
+  useEffect(() => {
+    refreshPresets();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // HELPERS: naam-controle en uniqueizer voor presets
-  function nameExists(name: string, excludeId?: string) {
-    return presets.some(
-      (p) =>
-        p.name.toLowerCase() === name.toLowerCase() &&
-        (p.id ?? p.name) !== excludeId,
-    );
-  }
-  function uniqueizeName(base: string, excludeId?: string) {
-    if (!nameExists(base, excludeId)) return base;
-    let i = 1;
-    while (nameExists(`${base} -${i}`, excludeId)) i++;
-    return `${base} -${i}`;
-  }
+  const result: ClassifierResult = useMemo(() => computeScore(input), [input]);
 
-  function createSnapshotFromPayload(
-    payload: PresetPayload | null,
-  ): PresetSnapshot | null {
-    if (!payload?.inputs || !payload?.gw || !payload?.vw || !payload?.th) {
-      return null;
-    }
+  const isBusy = loadingPresets || isSavingPreset || isSavingChanges || isExportingPdf || isExportingCsv;
+
+  const activePreset = useMemo(() => {
+    return presets.find((preset) => (preset.id ?? preset.name) === selectedPresetId) ?? null;
+  }, [presets, selectedPresetId]);
+
+  const groupComputation = useMemo(() => {
+    const groups: GroupComputation[] = (Object.keys(groupVariables) as GroupKey[]).map((group) => {
+      const computation = computeGroupScore(group, input, variableWeights);
+      return { key: group, score: computation.groupScore, contributions: computation.contributions };
+    });
+    const totalScore = groups.reduce((total, current) => total + current.score * groupWeights[current.key], 0);
+    const classification = classify(totalScore, thresholds);
+    return { groups, totalScore: clamp(totalScore), classification };
+  }, [groupWeights, input, thresholds, variableWeights]);
+
+  const handleGroupWeightChange = (key: keyof GroupWeights) => (event: ChangeEvent<HTMLInputElement>) => {
+    const value = Number(event.target.value);
+    setGroupWeights((prev) => ({ ...prev, [key]: Number.isFinite(value) ? value : 0 }));
+  };
+
+  const handleVariableWeightChange = (key: keyof VarWeights) => (event: ChangeEvent<HTMLInputElement>) => {
+    const value = Number(event.target.value);
+    setVariableWeights((prev) => ({ ...prev, [key]: Number.isFinite(value) ? value : 0 }));
+  };
+
+  const handleThresholdChange = (key: keyof Thresholds) => (event: ChangeEvent<HTMLInputElement>) => {
+    const value = Number(event.target.value);
+    setThresholds((prev) => ({ ...prev, [key]: Number.isFinite(value) ? value : prev[key] }));
+  };
+
+  const handleScenarioNameChange = (event: ChangeEvent<HTMLInputElement>) => {
+    setScenarioName(event.target.value);
+  };
+
+  const nameExists = (name: string, excludeId?: string) => {
+    return presets.some((preset) => {
+      const identifier = preset.id ?? preset.name;
+      return identifier !== excludeId && preset.name.toLowerCase() === name.toLowerCase();
+    });
+  };
+
+  const ensureUniqueName = (name: string, excludeId?: string) => {
+    if (!nameExists(name, excludeId)) return name;
+    let suffix = 1;
+    while (nameExists(`${name} -${suffix}`, excludeId)) suffix += 1;
+    return `${name} -${suffix}`;
+  };
+
+  const snapshotFromPayload = (payload: PresetPayload | null): PresetSnapshot | null => {
+    if (!payload?.inputs || !payload?.gw || !payload?.vw || !payload?.th) return null;
     return {
       inputs: JSON.parse(JSON.stringify(payload.inputs)) as Inputs,
       gw: JSON.parse(JSON.stringify(payload.gw)) as GroupWeights,
       vw: JSON.parse(JSON.stringify(payload.vw)) as VarWeights,
       th: JSON.parse(JSON.stringify(payload.th)) as Thresholds,
     };
-  }
+  };
 
-  function applySnapshot(snapshot: PresetSnapshot) {
+  const applySnapshot = (snapshot: PresetSnapshot) => {
     setInput(snapshot.inputs);
-    setGw(snapshot.gw);
-    setVw(snapshot.vw);
-    setTh(snapshot.th);
+    setGroupWeights(snapshot.gw);
+    setVariableWeights(snapshot.vw);
+    setThresholds(snapshot.th);
     setLastAppliedSnapshot(snapshot);
-  }
+  };
 
-  function applyPresetRecord(rec: PresetRecord, announce = true) {
-    const snapshot = createSnapshotFromPayload(rec.data as PresetPayload);
+  const applyPresetRecord = (record: PresetRecord, announce = true) => {
+    const snapshot = snapshotFromPayload(record.data as PresetPayload);
     if (!snapshot) {
-      toaster.show(
-        "Preset is ongeldig (test/smoke) — niet toegepast",
-        "error",
-      );
+      toaster.show("Preset is ongeldig — niet toegepast", "error");
       return false;
     }
     applySnapshot(snapshot);
-    setPresetName(rec.name ?? "");
-    if (announce) {
-      toaster.show(`Toegepast: ${rec.name}`, "success");
-    }
+    setPresetName(record.name ?? "");
+    if (announce) toaster.show(`Toegepast: ${record.name}`, "success");
     return true;
-  }
+  };
 
-  function handleSelectPreset(id: string) {
+  const handleSelectPreset = (id: string) => {
     setSelectedPresetId(id);
     if (!id) {
       setLastAppliedSnapshot(null);
       setPresetName("");
       return;
     }
-    const rec = presets.find((p) => (p.id ?? p.name) === id);
-    if (rec) {
-      const applied = applyPresetRecord(rec);
-      if (!applied) {
-        setSelectedPresetId("");
-      }
+    const record = presets.find((p) => (p.id ?? p.name) === id);
+    if (record) {
+      const applied = applyPresetRecord(record);
+      if (!applied) setSelectedPresetId("");
     }
-  }
+  };
 
-  async function handleSavePreset() {
-    if (isSavingPreset) return;
-    const raw = (presetName ?? "").trim();
-    if (raw.length < 3) {
-      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
-      return;
-    }
-    const payload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
-
-    setIsSavingPreset(true);
-    toaster.show("Opslaan…", "info");
-    try {
-      const finalName = uniqueizeName(raw);
-      await savePreset(finalName, payload);
-      const list = await refreshPresets(false);
-      const created = list.find((p) => p.name === finalName);
-      if (created) {
-        const identifier = created.id ?? created.name;
-        setSelectedPresetId(identifier);
-        applyPresetRecord(created, false);
-      } else {
-        const snapshot = createSnapshotFromPayload(payload);
-        if (snapshot) setLastAppliedSnapshot(snapshot);
-      }
-      setPresetName(finalName);
-      toaster.show(`Preset opgeslagen ✔ (${finalName})`, "success");
-    } catch (e: any) {
-      console.error(e);
-      toaster.show(
-        `Fout bij opslaan — ${e?.message ?? "zie Console"}`,
-        "error",
-      );
-    } finally {
-      setIsSavingPreset(false);
-    }
-  }
-
-  async function handleSaveChanges() {
-    if (isSavingChanges) return;
-    if (!selectedPresetId) {
-      toaster.show("Geen preset gekozen", "error");
-      return;
-    }
-
-    const typed = (presetName ?? "").trim();
-    if (typed && typed.length < 3) {
-      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
-      return;
-    }
-
-    const target = typed.length ? typed : activePreset?.name || "";
-    if (target.length < 3) {
-      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
-      return;
-    }
-
-   const payload: PresetPayload = { inputs: input, gw, vw, th, label: "v1.0.2" };
-
-    setIsSavingChanges(true);
-    toaster.show("Wijzigingen opslaan…", "info");
-    try {
-      const finalName = uniqueizeName(target, selectedPresetId);
-      const res = await updatePreset(selectedPresetId, finalName, payload);
-      const snapshot = createSnapshotFromPayload(payload);
-      if (snapshot) {
-        setLastAppliedSnapshot(snapshot);
-      }
-      if (res?.id) setSelectedPresetId(res.id);
-      else setSelectedPresetId(finalName);
-      await refreshPresets(false);
-      setPresetName(finalName);
-      toaster.show(`Wijzigingen opgeslagen ✔ (${finalName})`, "success");
-    } catch (e: any) {
-      console.error(e);
-      toaster.show(
-        `Fout bij wijzigen — ${e?.message ?? "zie Console"}`,
-        "error",
-      );
-    } finally {
-      setIsSavingChanges(false);
-    }
-  }
-  // === END HELPERS ===
-
-  async function refreshPresets(announce = true) {
+  const refreshPresets = async (announce = true) => {
     setLoadingPresets(true);
     try {
       const list = await loadPresets();
       setPresets(list);
-
-      if (announce) {
-        toaster.show(`Verversd: ${list.length} presets`, "info");
-      }
+      if (announce) toaster.show(`Verversd: ${list.length} presets`, "info");
       return list;
-    } catch (e: any) {
-      console.error(e);
-      if (announce) {
-        toaster.show(
-          `Fout bij laden presets — ${e?.message ?? "zie Console"}`,
-          "error",
-        );
-      }
+    } catch (error: any) {
+      console.error(error);
+      if (announce) toaster.show(`Fout bij laden presets — ${error?.message ?? "zie console"}`, "error");
       setPresets([]);
       return [];
     } finally {
       setLoadingPresets(false);
     }
-  }
+  };
 
-  useEffect(() => {
-    refreshPresets();
-  }, []);
+  const handleSavePreset = async () => {
+    if (isSavingPreset) return;
+    const rawName = presetName.trim();
+    if (rawName.length < 3) {
+      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
+      return;
+    }
+    const payload: PresetPayload = { inputs: input, gw: groupWeights, vw: variableWeights, th: thresholds, label: "v1.0.2" };
+    setIsSavingPreset(true);
+    toaster.show("Opslaan…", "info");
+    try {
+      const uniqueName = ensureUniqueName(rawName);
+      await savePreset(uniqueName, payload);
+      const list = await refreshPresets(false);
+      const created = list.find((p) => p.name === uniqueName);
+      if (created) {
+        const identifier = created.id ?? created.name;
+        setSelectedPresetId(identifier);
+        applyPresetRecord(created, false);
+      } else {
+        const snapshot = snapshotFromPayload(payload);
+        if (snapshot) setLastAppliedSnapshot(snapshot);
+      }
+      setPresetName(uniqueName);
+      toaster.show(`Preset opgeslagen ✔ (${uniqueName})`, "success");
+    } catch (error: any) {
+      console.error(error);
+      toaster.show(`Fout bij opslaan — ${error?.message ?? "zie console"}`, "error");
+    } finally {
+      setIsSavingPreset(false);
+    }
+  };
 
-  async function handleApplyPreset() {
+  const handleSaveChanges = async () => {
+    if (isSavingChanges) return;
+    if (!selectedPresetId) {
+      toaster.show("Geen preset gekozen", "error");
+      return;
+    }
+    const trimmed = presetName.trim();
+    if (trimmed && trimmed.length < 3) {
+      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
+      return;
+    }
+    const baseName = trimmed.length ? trimmed : activePreset?.name ?? "";
+    if (baseName.length < 3) {
+      toaster.show("Naam te kort (minimaal 3 tekens)", "error");
+      return;
+    }
+    const payload: PresetPayload = { inputs: input, gw: groupWeights, vw: variableWeights, th: thresholds, label: "v1.0.2" };
+    setIsSavingChanges(true);
+    toaster.show("Wijzigingen opslaan…", "info");
+    try {
+      const finalName = ensureUniqueName(baseName, selectedPresetId);
+      const snapshot = snapshotFromPayload(payload);
+      const result = await updatePreset(selectedPresetId, finalName, payload);
+      if (snapshot) setLastAppliedSnapshot(snapshot);
+      if (result?.id) setSelectedPresetId(result.id); else setSelectedPresetId(finalName);
+      await refreshPresets(false);
+      setPresetName(finalName);
+      toaster.show(`Wijzigingen opgeslagen ✔ (${finalName})`, "success");
+    } catch (error: any) {
+      console.error(error);
+      toaster.show(`Fout bij wijzigen — ${error?.message ?? "zie console"}`, "error");
+    } finally {
+      setIsSavingChanges(false);
+    }
+  };
+
+  const handleApplyPreset = async () => {
     if (!selectedPresetId) {
       toaster.show("Kies een preset", "error");
       return;
     }
-    const rec = presets.find((p) => (p.id ?? p.name) === selectedPresetId);
-    if (!rec) {
+    const record = presets.find((p) => (p.id ?? p.name) === selectedPresetId);
+    if (!record) {
       toaster.show("Kies een geldige preset", "error");
       return;
     }
     try {
-      applyPresetRecord(rec);
-    } catch (e: any) {
-      console.error(e);
-      toaster.show(
-        `Fout bij toepassen — ${e?.message ?? "zie Console"}`,
-        "error",
-      );
+      applyPresetRecord(record);
+    } catch (error: any) {
+      console.error(error);
+      toaster.show(`Fout bij toepassen — ${error?.message ?? "zie console"}`, "error");
     }
-  }
+  };
 
-  async function handleDeletePreset() {
+  const handleDeletePreset = async () => {
     if (!selectedPresetId) {
       toaster.show("Geen preset gekozen", "error");
       return;
     }
     toaster.show("Verwijderen…", "info");
     try {
-      const res = await deletePreset(selectedPresetId);
+      const response = await deletePreset(selectedPresetId);
       setSelectedPresetId("");
       setPresetName("");
       setLastAppliedSnapshot(null);
       await refreshPresets(false);
-      toaster.show(
-        res.count ? `Verwijderd ✔ (${res.count})` : "Niets verwijderd",
-        res.count ? "success" : "info",
-      );
-    } catch (e: any) {
-      console.error(e);
-      toaster.show(
-        `Fout bij verwijderen — ${e?.message ?? "zie Console"}`,
-        "error",
-      );
+      toaster.show(response.count ? `Verwijderd ✔ (${response.count})` : "Niets verwijderd", response.count ? "success" : "info");
+    } catch (error: any) {
+      console.error(error);
+      toaster.show(`Fout bij verwijderen — ${error?.message ?? "zie console"}`, "error");
     }
-  }
+  };
 
-  // Scenario compare (A/B) in localStorage
-  const [scenarioName, setScenarioName] = useState("Scenario A");
-  const [otherScenario, setOtherScenario] = useState<any | null>(() =>
-    readScenarioB(),
-  );
-
-  const groupSum = Object.values(gw).reduce((a, b) => a + b, 0);
-  const groupWarning = Math.abs(1 - groupSum) > 0.0001;
-
-  // Compute scores per group and total
-  const { groupScores, totalScore, classification } =
-    useMemo(() => {
-      const entries: {
-        key: GroupKey;
-        score: number;
-        contribs: {
-          key: string;
-          score: number;
-          weight: number;
-          contribution: number;
-        }[];
-      }[] = [];
-      (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-        const { groupScore, contributions } = computeGroupScore(g, input, vw);
-        entries.push({ key: g, score: groupScore, contribs: contributions });
-      });
-      const total = entries.reduce(
-        (acc, e) => acc + e.score * (gw as any)[e.key],
-        0,
-      );
-
-      const cls = classify(total * 1, th);
-      return {
-        groupScores: entries,
-        totalScore: clamp(total),
-        classification: cls,
-      };
-    }, [input, gw, vw, th]);
-
-  // Handlers
-
-  function saveScenarioB() {
-    const payload = { name: scenarioName, inputs: input, gw, vw, th };
-    writeScenarioB(payload);
-    setOtherScenario(payload);
+  const saveScenarioB = () => {
+    const snapshot: PresetSnapshot & { name?: string } = {
+      name: scenarioName,
+      inputs: input,
+      gw: groupWeights,
+      vw: variableWeights,
+      th: thresholds,
+    };
+    writeScenarioB(snapshot);
+    setOtherScenario(snapshot);
     toaster.show("Scenario B bewaard (sessie)", "success");
-  }
+  };
 
   const handleExportPdf = async () => {
     if (isExportingPdf) return;
     setIsExportingPdf(true);
     try {
       const classificationCode =
-        typeof classification === "string"
-          ? classification
-          : classification?.code ?? "n.v.t.";
-      const toRow = (label: string, v: unknown): [string, string] => [
-        label,
-        String(v ?? ""),
-      ];
+        typeof groupComputation.classification === "string"
+          ? groupComputation.classification
+          : groupComputation.classification?.code ?? "n.v.t.";
       const selectedList = (options: MultiOptions) => {
-        const active = Object.entries(options)
-          .filter(([, isActive]) => isActive)
+        const active = Object.entries(options ?? {})
+          .filter(([, enabled]) => Boolean(enabled))
           .map(([key]) => key);
         return active.length ? active.join(", ") : "Geen";
       };
+      const toRow = (label: string, value: unknown): [string, string] => [label, String(value ?? "")];
+
       const sections: PdfSection[] = [
         {
           title: "Operationele kenmerken",
           rows: [
             toRow("Aantal SKU's", input.skuCount),
-            toRow("SKU-complexiteit", input.skuComplexity),
-            toRow("Ordervolume/mnd (gem.)", input.orderVolume),
-            toRow("Piekvolume", input.orderPeak),
-            toRow("Seizoensinvloeden", input.seizoensinvloed),
+            toRow("Ordervolume", input.orderVolume),
+            toRow("Orderpiek", input.orderPeak),
             toRow("Retourpercentage", `${input.retourPercentage}%`),
-            toRow("VAS-activiteiten", selectedList(input.vasActiviteiten)),
-            toRow(
-              "Inbound bijzonderheden",
-              selectedList(input.inboundBijzonderheden),
-            ),
+            toRow("SKU-complexiteit", input.skuComplexity),
+            toRow("Seizoensinvloed", input.seizoensinvloed),
           ],
         },
         {
-          title: "Technische integratie",
+          title: "Technisch & configuratie",
           rows: [
             toRow("Platformtype", input.platformType),
             toRow("Type koppeling", input.typeKoppeling),
             toRow("PostNL API's", selectedList(input.postnlApis)),
-            toRow("Kanalen", input.verzendMethoden),
+            toRow("Configuratie door", input.configDoor),
+            toRow("Mate van maatwerk", input.mateMaatwerk),
+          ],
+        },
+        {
+          title: "Organisatie & processen",
+          rows: [
+            toRow("Afdelingen", input.aantalAfdelingen),
+            toRow("Scope wijzigingen", input.scopeWijzigingen),
+            toRow("Voorraadbeheer", input.voorraadBeheer),
+            toRow("Replenishment", input.replenishment),
+            toRow("Verzendmethoden", input.verzendMethoden),
+            toRow("Retourproces", input.retourProces),
           ],
         },
       ];
       const { exportPdf } = await import("./lib/exportPdf");
-      exportPdf({
-        presetName: (presetName || activePreset?.name || "") as string,
-        classification: classificationCode,
-        sections,
-      });
-    } catch (e: any) {
-      console.error(e);
-      toaster.show(
-        `Fout bij PDF export — ${e?.message ?? "zie Console"}`,
-        "error",
-      );
+      exportPdf({ presetName: (presetName || activePreset?.name || "") as string, classification: classificationCode, sections });
+    } catch (error: any) {
+      console.error(error);
+      toaster.show(`Fout bij PDF export — ${error?.message ?? "zie console"}`, "error");
     } finally {
       setIsExportingPdf(false);
     }
@@ -862,133 +743,114 @@ function OnboardingClassifierContent() {
   const handleExportCsv = async () => {
     if (isExportingCsv) return;
     setIsExportingCsv(true);
-    let url: string | null = null;
+    let blobUrl: string | null = null;
     try {
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      const row: Record<string, any> = {
-        totalScore: totalScore.toFixed(1),
-        class: classification.code,
-        lead: classification.lead,
+      const row: Record<string, unknown> = {
+        totalScore: groupComputation.totalScore.toFixed(1),
+        class: groupComputation.classification.code,
+        lead: groupComputation.classification.lead,
       };
-      Object.entries(input).forEach(([k, v]) => {
-        if (typeof v === "object" && v !== null) {
-          row[k] = Object.entries(v as any)
-            .filter(([, on]) => !!on)
-            .map(([name]) => name)
+      Object.entries(input).forEach(([key, value]) => {
+        if (value && typeof value === "object") {
+          const active = Object.entries(value as Record<string, boolean>)
+            .filter(([, enabled]) => Boolean(enabled))
+            .map(([option]) => option)
             .join("; ");
+          row[key] = active;
         } else {
-          row[k] = v as any;
+          row[key] = value as unknown;
         }
       });
-      groupScores.forEach((gs) => (row[`group_${gs.key}`] = gs.score.toFixed(1)));
+      groupComputation.groups.forEach((group) => {
+        row[`group_${group.key}`] = group.score.toFixed(1);
+      });
       const csv = toCSV([row]);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-      url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = "onboarding-classifier.csv";
-      a.click();
-    } catch (e: any) {
-      console.error(e);
-      toaster.show(
-        `Fout bij CSV export — ${e?.message ?? "zie Console"}`,
-        "error",
-      );
+      blobUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = blobUrl;
+      anchor.download = "onboarding-classifier.csv";
+      anchor.click();
+    } catch (error: any) {
+      console.error(error);
+      toaster.show(`Fout bij CSV export — ${error?.message ?? "zie console"}`, "error");
     } finally {
-      if (url) {
-        URL.revokeObjectURL(url);
-      }
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
       setIsExportingCsv(false);
     }
   };
 
-  function resetAll() {
+  const resetAll = () => {
     setInput(defaultInputs());
-    setGw(defaultGroupWeights());
-    setVw(defaultVarWeights());
-    setTh(defaultThresholds());
+    setGroupWeights(defaultGroupWeights());
+    setVariableWeights(defaultVarWeights());
+    setThresholds(defaultThresholds());
     try {
-      sessionStorage.removeItem("onb_scenario_b");
-    } catch {}
+      sessionStorage.removeItem(SCENARIO_B_KEY);
+    } catch (error) {
+      console.error(error);
+    }
     setOtherScenario(null);
     setSelectedPresetId("");
     setPresetName("");
     setLastAppliedSnapshot(null);
     toaster.show("Alles gereset (A + B)", "info");
-  }
+  };
 
-    // ---------- Render ----------
-  const trimmedPresetName = (presetName ?? "").trim();
+  const groupWeightSum = Object.values(groupWeights).reduce((sum, value) => sum + value, 0);
+  const groupWeightWarning = Math.abs(1 - groupWeightSum) > 0.0001;
+
+  const trimmedPresetName = presetName.trim();
   const canSaveNewPreset = trimmedPresetName.length >= 3;
-  const currentSnapshot = { inputs: input, gw, vw, th };
-  const isDirty =
-    !!selectedPresetId &&
-    !!lastAppliedSnapshot &&
-    !deepEqual(currentSnapshot, lastAppliedSnapshot);
+  const currentSnapshot = { inputs: input, gw: groupWeights, vw: variableWeights, th: thresholds };
+  const isDirty = Boolean(selectedPresetId) && Boolean(lastAppliedSnapshot) && !deepEqual(currentSnapshot, lastAppliedSnapshot);
 
   return (
     <div className="oc-container">
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
-        <h1 style={{ fontSize: 22, fontWeight: 800, margin: 0 }}>
-          Onboarding Classifier
-        </h1>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            onClick={handleExportPdf}
-            disabled={isExportingPdf}
-            aria-busy={isExportingPdf}
-            style={{
-              ...btnPrimary,
-              cursor: isExportingPdf ? "wait" : "pointer",
-              opacity: isExportingPdf ? 0.85 : 1,
-            }}
-          >
-            {isExportingPdf ? "Bezig..." : "Export PDF"}
-          </button>
-          <button
-            onClick={handleExportCsv}
-            disabled={isExportingCsv}
-            aria-busy={isExportingCsv}
-            style={{
-              ...btnPrimary,
-              cursor: isExportingCsv ? "wait" : "pointer",
-              opacity: isExportingCsv ? 0.85 : 1,
-            }}
-          >
-            {isExportingCsv ? "Bezig..." : "Export CSV"}
-          </button>
-          <button
-            onClick={saveScenarioB}
-            style={{
-              ...btnPrimary,
-              background: "#2563eb",
-            }}
-          >
-            Bewaar Scenario B
-          </button>
-          <button
-            onClick={resetAll}
-            style={{
-              ...btnSecondary,
-            }}
-          >
-            Reset
-          </button>
-        </div>
-      </div>
+      <HeaderBar
+        title="Onboarding Classifier"
+        leftSlot={
+          <input
+            aria-label="Naam van scenario A"
+            value={scenarioName}
+            onChange={handleScenarioNameChange}
+            style={{ ...inputStyle, width: 200 }}
+          />
+        }
+        rightSlot={
+          <>
+            <button
+              onClick={handleExportPdf}
+              disabled={isExportingPdf}
+              aria-busy={isExportingPdf}
+              style={{ ...btnPrimary, cursor: isExportingPdf ? "wait" : "pointer", opacity: isExportingPdf ? 0.85 : 1 }}
+            >
+              {isExportingPdf ? "Bezig..." : "Export PDF"}
+            </button>
+            <button
+              onClick={handleExportCsv}
+              disabled={isExportingCsv}
+              aria-busy={isExportingCsv}
+              style={{ ...btnPrimary, cursor: isExportingCsv ? "wait" : "pointer", opacity: isExportingCsv ? 0.85 : 1 }}
+            >
+              {isExportingCsv ? "Bezig..." : "Export CSV"}
+            </button>
+            <button onClick={saveScenarioB} style={{ ...btnPrimary, background: "#2563eb" }}>
+              Bewaar Scenario B
+            </button>
+            <button onClick={resetAll} style={{ ...btnSecondary }}>
+              Reset
+            </button>
+          </>
+        }
+      />
+
       <PresetsCard
         presets={presets}
         selectedPresetId={selectedPresetId || null}
         onSelectPreset={handleSelectPreset}
         name={presetName}
-        onNameChange={(value) => setPresetName(value)}
+        onNameChange={setPresetName}
         onSave={handleSavePreset}
         canSave={canSaveNewPreset}
         isSavingPreset={isSavingPreset}
@@ -1000,21 +862,18 @@ function OnboardingClassifierContent() {
         onSaveChanges={handleSaveChanges}
         isSavingChanges={isSavingChanges}
       />
-      {/* --- EINDE PRESETS CARD --- */}
 
-      {/* Layout */}
       <div className="oc-grid">
-        {/* Left: Inputs */}
         <div>
           <InputsForm />
 
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Group weights</h2>
-            <div style={grid3}>
-              {(Object.keys(gw) as (keyof GroupWeights)[]).map((key) => (
+          <div style={{ ...cardStyle, ...sectionStyle }}>
+            <h2 style={headingStyle}>Group weights</h2>
+            <div style={gridThreeStyle}>
+              {(Object.keys(groupWeights) as Array<keyof GroupWeights>).map((key) => (
                 <div key={key}>
-                  <label style={label}>
-                    {key} ({(gw[key] * 100).toFixed(0)}%)
+                  <label style={labelStyle}>
+                    {key} ({(groupWeights[key] * 100).toFixed(0)}%)
                   </label>
                   <input
                     style={inputStyle}
@@ -1022,28 +881,26 @@ function OnboardingClassifierContent() {
                     min={0}
                     max={1}
                     step={0.01}
-                    value={gw[key]}
-                    onChange={(e) =>
-  setGw((prev: GroupWeights) => ({ ...prev, [key]: Number(e.target.value) }))
-}
+                    value={groupWeights[key]}
+                    onChange={handleGroupWeightChange(key)}
                   />
                 </div>
               ))}
             </div>
-            {groupWarning && (
+            {groupWeightWarning ? (
               <div style={{ color: "#ef4444", marginTop: 8 }}>
-                Waarschuwing: som ≠ 1.0 (nu {groupSum.toFixed(2)})
+                Waarschuwing: som ≠ 1.0 (nu {groupWeightSum.toFixed(2)})
               </div>
-            )}
+            ) : null}
           </div>
 
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Variable weights</h2>
+          <div style={{ ...cardStyle, ...sectionStyle }}>
+            <h2 style={headingStyle}>Variable weights</h2>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
-              {(Object.keys(vw) as (keyof VarWeights)[]).map((key) => (
+              {(Object.keys(variableWeights) as Array<keyof VarWeights>).map((key) => (
                 <div key={key} style={{ width: 140 }}>
-                  <label style={label}>
-                    {key} ({(vw[key] * 100).toFixed(0)}%)
+                  <label style={labelStyle}>
+                    {key} ({(variableWeights[key] * 100).toFixed(0)}%)
                   </label>
                   <input
                     style={inputStyle}
@@ -1051,31 +908,27 @@ function OnboardingClassifierContent() {
                     min={0}
                     max={1}
                     step={0.01}
-                    value={vw[key]}
-                    onChange={(e) =>
-  setVw((prev: VarWeights) => ({ ...prev, [key]: Number(e.target.value) }))
-}
+                    value={variableWeights[key]}
+                    onChange={handleVariableWeightChange(key)}
                   />
                 </div>
               ))}
             </div>
           </div>
 
-          <div style={{ ...card, ...section }}>
-            <h2 style={h2}>Thresholds</h2>
-            <div style={grid3}>
-              {(Object.keys(th) as (keyof Thresholds)[]).map((key) => (
+          <div style={{ ...cardStyle, ...sectionStyle }}>
+            <h2 style={headingStyle}>Thresholds</h2>
+            <div style={gridThreeStyle}>
+              {(Object.keys(thresholds) as Array<keyof Thresholds>).map((key) => (
                 <div key={key}>
-                  <label style={label}>{key}</label>
+                  <label style={labelStyle}>{key}</label>
                   <input
                     style={inputStyle}
                     type="number"
                     min={0}
                     max={100}
-                    value={th[key]}
-                    onChange={(e) =>
-  setTh((prev: Thresholds) => ({ ...prev, [key]: Number(e.target.value) }))
-}
+                    value={thresholds[key]}
+                    onChange={handleThresholdChange(key)}
                   />
                 </div>
               ))}
@@ -1083,67 +936,52 @@ function OnboardingClassifierContent() {
           </div>
         </div>
 
-        {/* Right: wrapper (alles rechts hoort in één kolom) */}
         <div>
           <ResultPanel result={result} isBusy={isBusy} />
 
-          {/* Scenario compare */}
-          <div style={{ ...card }}>
-            <h2 style={h2}>Scenario-vergelijking</h2>
-            <div style={{ ...small, marginBottom: 8 }}>
-              Bewaar de huidige invoer als Scenario B en vergelijk.
-            </div>
-            <div style={grid2}>
+          <div style={{ ...cardStyle }}>
+            <h2 style={headingStyle}>Scenario-vergelijking</h2>
+            <div style={{ ...smallTextStyle, marginBottom: 8 }}>Bewaar de huidige invoer als Scenario B en vergelijk.</div>
+            <div style={gridTwoStyle}>
               <div>
                 <div style={{ fontWeight: 700, marginBottom: 6 }}>{scenarioName}</div>
-                <div style={{ marginBottom: 4 }}>Score: {totalScore.toFixed(1)}</div>
-                <div>Class: {classification.code} • {classification.lead}</div>
+                <div style={{ marginBottom: 4 }}>Score: {groupComputation.totalScore.toFixed(1)}</div>
+                <div>
+                  Class: {groupComputation.classification.code} • {groupComputation.classification.lead}
+                </div>
               </div>
               <div>
-                <div style={{ fontWeight: 700, marginBottom: 6 }}>
-                  {otherScenario?.name ?? "Scenario B (geen)"}
-                </div>
+                <div style={{ fontWeight: 700, marginBottom: 6 }}>{otherScenario?.name ?? "Scenario B (geen)"}</div>
                 {otherScenario ? (
                   <>
                     <div style={{ marginBottom: 4 }}>
-                      Score: {(() => {
-                        const scInputs = otherScenario.inputs as Inputs;
-                        const scGw = otherScenario.gw as GroupWeights;
-                        const scVw = otherScenario.vw as VarWeights;
-                        const entries: any[] = [];
-                        (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-                          const r = computeGroupScore(g, scInputs, scVw);
-                          entries.push({ key: g, score: r.groupScore });
+                      Score:{" "}
+                      {(() => {
+                        const entries: Array<{ key: GroupKey; score: number }> = [];
+                        (Object.keys(groupVariables) as GroupKey[]).forEach((group) => {
+                          const r = computeGroupScore(group, otherScenario.inputs as Inputs, otherScenario.vw as VarWeights);
+                          entries.push({ key: group, score: r.groupScore });
                         });
-                        const total = entries.reduce(
-                          (acc, e) => acc + e.score * (scGw as any)[e.key],
-                          0
-                        );
+                        const total = entries.reduce((acc, e) => acc + e.score * (otherScenario.gw as any)[e.key], 0);
                         return clamp(total).toFixed(1);
                       })()}
                     </div>
                     <div>
-                      Class: {(() => {
-                        const scInputs = otherScenario.inputs as Inputs;
-                        const scGw = otherScenario.gw as GroupWeights;
-                        const scVw = otherScenario.vw as VarWeights;
-                        const scTh = otherScenario.th as Thresholds;
-                        const entries: any[] = [];
-                        (Object.keys(groupVars) as GroupKey[]).forEach((g) => {
-                          const r = computeGroupScore(g, scInputs, scVw);
-                          entries.push({ key: g, score: r.groupScore });
+                      Class:{" "}
+                      {(() => {
+                        const entries: Array<{ key: GroupKey; score: number }> = [];
+                        (Object.keys(groupVariables) as GroupKey[]).forEach((group) => {
+                          const r = computeGroupScore(group, otherScenario.inputs as Inputs, otherScenario.vw as VarWeights);
+                          entries.push({ key: group, score: r.groupScore });
                         });
-                        const total = entries.reduce(
-                          (acc, e) => acc + e.score * (scGw as any)[e.key],
-                          0
-                        );
-                        const cls = classify(total, scTh);
-                        return `${cls.code} • ${cls.lead}`;
+                        const total = entries.reduce((acc, e) => acc + e.score * (otherScenario.gw as any)[e.key], 0);
+                        const classification = classify(total, otherScenario.th as Thresholds);
+                        return `${classification.code} • ${classification.lead}`;
                       })()}
                     </div>
                   </>
                 ) : (
-                  <div style={small}>Nog geen Scenario B opgeslagen.</div>
+                  <div style={smallTextStyle}>Nog geen Scenario B opgeslagen.</div>
                 )}
               </div>
             </div>
@@ -1151,23 +989,7 @@ function OnboardingClassifierContent() {
         </div>
       </div>
 
-      <div
-        style={{
-          textAlign: "right",
-          marginTop: 12,
-          color: "#9ca3af",
-          fontSize: 12,
-        }}
-      >
-        v1.0.0 — Onboarding Classifier
-      </div>
+      <div style={{ textAlign: "right", marginTop: 12, color: "#9ca3af", fontSize: 12 }}>v1.0.0 — Onboarding Classifier</div>
     </div>
   );
 }
-
-/* Example App.tsx
-import OnboardingClassifier from "./OnboardingClassifier";
-export default function App(){
-  return <OnboardingClassifier/>;
-}
-*/
