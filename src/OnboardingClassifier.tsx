@@ -392,24 +392,28 @@ function classify(score: number, th: Thresholds) {
 
 // ---------- UI helpers ----------
 const section: React.CSSProperties = { marginBottom: 24 };
+
 const card: React.CSSProperties = {
-  background: "#fff",
-  border: "1px solid #e5e7eb",
-  borderRadius: 16,
+  background: "var(--card)",
+  border: "1px solid var(--border)",
+  borderRadius: "var(--radius)",
   padding: 16,
-  boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+  boxShadow: "var(--shadow)",
 };
+
 const label: React.CSSProperties = {
   fontSize: 13,
-  color: "#374151",
+  color: "var(--muted)",
   marginBottom: 6,
   display: "block",
 };
+
 const inputStyle: React.CSSProperties = {
   width: "100%",
-  padding: "8px 10px",
-  borderRadius: 10,
-  border: "1px solid #e5e7eb",
+  padding: "10px 12px",
+  borderRadius: 8,
+  border: "1px solid var(--border)",
+  background: "#fff",
 };
 
 const grid2: React.CSSProperties = {
@@ -417,17 +421,22 @@ const grid2: React.CSSProperties = {
   gridTemplateColumns: "1fr 1fr",
   gap: 16,
 };
+
 const grid3: React.CSSProperties = {
   display: "grid",
   gridTemplateColumns: "1fr 1fr 1fr",
   gap: 16,
 };
+
 const h2: React.CSSProperties = {
   fontSize: 18,
   fontWeight: 700,
-  margin: "0 0 8px",
+  margin: "0 0 10px",
+  color: "#111827",
 };
-const small: React.CSSProperties = { fontSize: 12, color: "#6b7280" };
+
+const small: React.CSSProperties = { fontSize: 12, color: "var(--muted)" };
+
 
 // ---------- CSV Export ----------
 function toCSV(rows: Record<string, any>[]) {

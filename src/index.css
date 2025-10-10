@@ -1,2 +1,60 @@
-html, body, #root { height: 100%; }
-body { margin: 0; font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; background:#f8fafc; }
+/* ---------- Modern Calm Theme ---------- */
+:root {
+  --background: #f9fafb;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --accent: #38bdf8;
+  --muted: #9ca3af;
+  --radius: 1rem;
+  --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  font-family: "Inter", sans-serif;
+  background: var(--background);
+  color: #111827;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  margin: 0;
+  padding: 0;
+}
+
+/* Universele card-stijl */
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  transition: box-shadow 0.2s ease;
+}
+.card:hover {
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.07);
+}
+
+/* Inputs & selects */
+input,
+select,
+button {
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+  font-family: inherit;
+  background: #fff;
+}
+
+/* Buttons (voor directe visuele impact) */
+button {
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+button:hover {
+  filter: brightness(0.98);
+}
