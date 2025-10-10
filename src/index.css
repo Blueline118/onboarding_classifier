@@ -1,137 +1,160 @@
-/* ---------- Modern Calm Theme ---------- */
+/* ---------- Blueline Premium Theme ---------- */
 :root {
-  --background: #f9fafb;
-  --card: #ffffff;
-  --border: #e5e7eb;
-  --primary: #3b82f6;
-  --primary-hover: #2563eb;
-  --accent: #38bdf8;
-  --muted: #9ca3af;
-  --radius: 1rem;
-  --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+--brand-navy: #0a2a4a;
+--brand-blue: #1565ff;
+--brand-blue-600: #0f4dca;
+--brand-blue-300: #8fb6ff;
+--success: #16a34a;
+--background: #f7f9fc;
+--card: #ffffff;
+--border: #e5eaf2;
+--muted: #6b7280;
+--shadow: 0 8px 20px rgba(10, 42, 74, 0.06);
+--radius: 14px;
 }
 
 html,
 body,
 #root {
-  height: 100%;
+height: 100%;
 }
 
 body {
-  font-family: "Inter", sans-serif;
-  background: var(--background);
-  color: #111827;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  margin: 0;
-  padding: 0;
+font-family: Inter, ui-sans-serif, system-ui, -apple-system;
+background: var(--background);
+color: #0f172a;
+-webkit-font-smoothing: antialiased;
+-moz-osx-font-smoothing: grayscale;
+margin: 0;
+padding: 0;
 }
 
-/* Universele card-stijl */
-.card {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  transition: box-shadow 0.2s ease;
+h1,
+h2 {
+color: var(--brand-navy);
 }
+
+/* Universele card-stijl /
+.card {
+background: var(--card);
+border: 1px solid var(--border);
+border-radius: var(--radius);
+box-shadow: var(--shadow);
+transition: box-shadow 0.2s ease;
+margin-bottom: 24px; / ruimte tussen kaarten */
+
+
 .card:hover {
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.07);
+box-shadow: 0 12px 28px rgba(10, 42, 74, 0.08);
 }
 
 /* Inputs & selects */
 input,
 select,
 button {
-  border-radius: 0.5rem;
-  border: 1px solid var(--border);
-  padding: 8px 10px;
-  font-family: inherit;
-  background: #fff;
+border-radius: 10px;
+border: 1px solid var(--border);
+padding: 8px 10px;
+font-family: inherit;
+background: #fff;
 }
 
 /* Buttons (voor directe visuele impact) */
 button {
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
-}
-button:hover {
-  filter: brightness(0.98);
+cursor: pointer;
+transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+button:hover {
+filter: brightness(0.98);
+}
 
 /* ---- Onboarding Classifier field layout ---- */
 .oc-section {
-  padding: 12px;
+padding: 12px;
 }
 
 .oc-fieldgrid {
-  display: grid;
-  gap: 16px;
+display: grid;
+gap: 16px;
 }
+
 @media (min-width: 992px) {
-  .oc-fieldgrid {
-    grid-template-columns: 1fr 1fr; /* two equal columns */
-    align-items: start;
-  }
+.oc-fieldgrid {
+grid-template-columns: 1fr 1fr; /* two equal columns */
+align-items: start;
+}
 }
 
 .oc-field {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+display: flex;
+flex-direction: column;
+gap: 6px;
 }
 
 .oc-field label {
-  font-size: 13px;
-  color: var(--muted);
+font-size: 13px;
+color: var(--muted);
 }
 
 .oc-field input,
 .oc-field select {
-  width: 100%;
-  padding: 10px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: #fff;
+width: 100%;
+padding: 10px 12px;
+border-radius: 10px;
+border: 1px solid var(--border);
+background: #fff;
+transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.oc-field input:focus,
+.oc-field select:focus {
+outline: none;
+border-color: var(--brand-blue-600);
+box-shadow: 0 0 0 3px rgba(21, 101, 255, 0.15);
 }
 
 /* Neat wrapping checkbox rows */
 .checkgroup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 16px;
+display: flex;
+flex-wrap: wrap;
+gap: 12px 16px;
 }
+
 .checkgroup label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+display: inline-flex;
+align-items: center;
+gap: 6px;
 }
 
 /* ---- Centered layout fix ---- */
 .oc-container {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 32px 24px;
-  background: var(--background);
+max-width: 1280px;
+margin: 0 auto;
+padding: 32px 24px;
+background: var(--background);
 }
 
 .oc-grid {
-  display: grid;
-  gap: 20px;
-}
-.card {
-  margin-bottom: 24px; /* ruimte tussen kaarten */
+display: grid;
+gap: 20px;
 }
 
 .card:last-child {
-  margin-bottom: 0; /* geen extra ruimte bij de laatste */
+margin-bottom: 0; /* geen extra ruimte bij de laatste */
 }
 
 @media (min-width: 992px) {
-  .oc-grid {
-    grid-template-columns: 1.2fr 0.8fr;
-    align-items: start;
-  }
+.oc-grid {
+grid-template-columns: 1.2fr 0.8fr;
+align-items: start;
+}
 }
 
+.progress-brand {
+background: var(--brand-blue-300);
+}
+
+.progress-brand__fill {
+background: var(--success);
+}
