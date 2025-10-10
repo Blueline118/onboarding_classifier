@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useState } from "react";
 import type { CSSProperties, ChangeEvent } from "react";
 
 import type { PresetRecord } from "../../../lib/presets";
@@ -8,7 +8,9 @@ export type PresetsCardProps = {
   presets: PresetRecord[];
   selectedPresetId: string | null;
   onSelectPreset: (id: string) => void;
+  /** Wordt alléén gebruikt bij opslaan van een nieuwe preset (mag door parent genegeerd worden) */
   name: string;
+  /** Ontvangt enkel user-typed wijzigingen uit het Naam-veld */
   onNameChange: (value: string) => void;
   onSave: () => void;
   canSave: boolean;
@@ -70,41 +72,25 @@ export default function PresetsCard({
   onSaveChanges,
   isSavingChanges,
 }: PresetsCardProps): JSX.Element {
-  const [mounted, setMounted] = useState(false);
-  const [localName, setLocalName] = useState(name);
+  // ⬇️ Lokale, losgekoppelde state voor het Naam-veld (snijdt de kabel met de dropdown)
+  const [localName, setLocalName] = useState<string>(name ?? "");
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    setLocalName(name);
-  }, [name]);
-
-  useEffect(() => {
-    if (localName !== name) {
-      onNameChange(localName);
-    }
-  }, [localName, name, onNameChange]);
-
-  const disableApply = useMemo(() => !selectedPresetId, [selectedPresetId]);
-  const presetValue = useMemo(() => selectedPresetId ?? "", [selectedPresetId]);
+  const disableApply = !selectedPresetId;
+  const presetValue = selectedPresetId ?? "";
 
   const handleNameChange = (event: ChangeEvent<HTMLInputElement>) => {
-    setLocalName(event.target.value);
+    const v = event.target.value;
+    setLocalName(v);       // lokaal tonen wat de gebruiker typt
+    onNameChange(v);       // parent op de hoogte stellen (voor save)
   };
 
   const handleSelectChange = (event: ChangeEvent<HTMLSelectElement>) => {
+    // Verandert ALLEEN de selectie; heeft GEEN effect op localName
     onSelectPreset(event.target.value);
   };
 
   return (
-    <div
-      className="card"
-      data-mounted={mounted}
-      data-id="presets-card"
-      style={{ ...cardStyle, ...sectionStyle }}
-    >
+    <div className="card" data-id="presets-card" style={{ ...cardStyle, ...sectionStyle }}>
       <h2 style={headingStyle}>Presets</h2>
       <div style={gridStyle}>
         <div>
@@ -181,7 +167,7 @@ export default function PresetsCard({
                 Vernieuwen
               </button>
             </div>
-              {isDirty ? (
+            {isDirty ? (
               <button
                 onClick={onSaveChanges}
                 disabled={isSavingChanges}

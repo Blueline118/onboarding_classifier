@@ -1,15 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, ChangeEvent } from "react";
 
-import {
-  HeaderBar,
-  InputsForm,
-  PresetsCard,
-  ResultPanel,
-  computeScore,
-  useClassifierActions,
-  useClassifierState,
-} from "@/features/classifier";
+import { HeaderBar, InputsForm, ResultPanel, computeScore, useClassifierActions, useClassifierState } from "@/features/classifier";
+import PresetsCardComponent from "./features/classifier/components/PresetsCard";
 import type {
   ClassifierInput as Inputs,
   ClassifierResult,
@@ -26,7 +19,7 @@ import {
   type PresetRecord,
 } from "./lib/presets";
 import { useToaster } from "./components/ui/Toaster";
-import { btnPrimary, btnSecondary } from "./ui/buttons";
+import { btnPrimary, btnSecondary, btnDanger } from "./ui/buttons";
 
 // ---------- Types ----------
 
@@ -845,12 +838,12 @@ function OnboardingClassifierContent(): JSX.Element {
         }
       />
 
-      <PresetsCard
+      <PresetsCardComponent
         presets={presets}
         selectedPresetId={selectedPresetId || null}
         onSelectPreset={handleSelectPreset}
         name={presetName}
-        onNameChange={setPresetName}
+        onNameChange={(v) => setPresetName(v)}
         onSave={handleSavePreset}
         canSave={canSaveNewPreset}
         isSavingPreset={isSavingPreset}
