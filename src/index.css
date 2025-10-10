@@ -120,6 +120,14 @@ button:hover {
   display: grid;
   gap: 20px;
 }
+.card {
+  margin-bottom: 24px; /* ruimte tussen kaarten */
+}
+
+.card:last-child {
+  margin-bottom: 0; /* geen extra ruimte bij de laatste */
+}
+
 @media (min-width: 992px) {
   .oc-grid {
     grid-template-columns: 1.2fr 0.8fr;
