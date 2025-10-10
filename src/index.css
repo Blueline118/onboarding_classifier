@@ -158,3 +158,44 @@ background: var(--brand-blue-300);
 .progress-brand__fill {
 background: var(--success);
 }
+
+/* ---- Cards: echte kaarten, geen hover, nette spacing ---- */
+.card {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+  transition: none;
+  margin-bottom: 20px;          /* ruimte tussen kaarten */
+}
+.card:hover {
+  transform: none;
+  box-shadow: 0 2px 10px rgba(0,0,0,.06);
+}
+
+/* Verticale stack spacing voor secties in forms */
+.card .stack {
+  display: grid;
+  gap: 14px;
+}
+
+/* ---- Compacte velden standaard in kaarten ---- */
+.card select,
+.card input[type="text"],
+.card input[type="number"],
+.card input[type="email"] {
+  width: auto;                 /* niet full width */
+  max-width: 320px;            /* cap breedte */
+}
+
+/* Als je wél volle breedte wilt voor een specifiek veld, geef class 'full' mee */
+.card .full {
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Extra compacte variant (gebruik className="compact-field") */
+.compact-field {
+  width: 280px;
+  max-width: 100%;
+}

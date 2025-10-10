@@ -762,7 +762,7 @@ function OnboardingClassifierContent(): JSX.Element {
       blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = blobUrl;
-      anchor.download = "onboarding-classifier.csv";
+      anchor.download = "onboarding-engine.csv";
       anchor.click();
     } catch (error: any) {
       console.error(error);
@@ -801,7 +801,7 @@ function OnboardingClassifierContent(): JSX.Element {
   return (
     <div className="oc-container">
       <HeaderBar
-        title="Onboarding Classifier"
+        title="Onboarding Engine"
         leftSlot={
           <input
             aria-label="Naam van scenario A"
@@ -838,23 +838,21 @@ function OnboardingClassifierContent(): JSX.Element {
         }
       />
 
-      <PresetsCardComponent
-        presets={presets}
-        selectedPresetId={selectedPresetId || null}
-        onSelectPreset={handleSelectPreset}
-        name={presetName}
-        onNameChange={(v) => setPresetName(v)}
-        onSave={handleSavePreset}
-        canSave={canSaveNewPreset}
-        isSavingPreset={isSavingPreset}
-        loadingPresets={loadingPresets}
-        onApply={handleApplyPreset}
-        onDelete={handleDeletePreset}
-        onRefresh={() => refreshPresets(true)}
-        isDirty={isDirty}
-        onSaveChanges={handleSaveChanges}
-        isSavingChanges={isSavingChanges}
-      />
+<PresetsCardComponent
+  presets={presets}
+  selectedPresetId={selectedPresetId || null}
+  onSelectPreset={handleSelectPreset}
+  name={presetName}
+  onNameChange={(v) => setPresetName(v)}
+  onSave={handleSavePreset}
+  canSave={canSaveNewPreset}
+  isSavingPreset={isSavingPreset}
+  loadingPresets={loadingPresets}
+  onDelete={handleDeletePreset}
+  isDirty={isDirty}
+  onSaveChanges={handleSaveChanges}
+  isSavingChanges={isSavingChanges}
+/>
 
       <div className="oc-grid">
         <div>
@@ -982,7 +980,7 @@ function OnboardingClassifierContent(): JSX.Element {
         </div>
       </div>
 
-      <div style={{ textAlign: "right", marginTop: 12, color: "#9ca3af", fontSize: 12 }}>v1.0.0 — Onboarding Classifier</div>
+      <div style={{ textAlign: "right", marginTop: 12, color: "#9ca3af", fontSize: 12 }}>Onboarding Engine - v1.1.0</div>
     </div>
   );
 }
