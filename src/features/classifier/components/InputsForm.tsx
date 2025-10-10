@@ -1,6 +1,8 @@
-import { ChangeEvent, useMemo } from "react";
-import type { ClassifierInput } from "@/features/classifier";
-import { useClassifierActions, useClassifierState } from "@/features/classifier";
+import React, { useEffect, useMemo, useState } from "react";
+import type { CSSProperties, ChangeEvent } from "react";
+
+import type { ClassifierInput } from "../types";
+import { useClassifierActions, useClassifierState } from "../hooks/useClassifierReducer";
 
 type NumericField =
   | "skuCount"
@@ -104,9 +106,49 @@ const multiFieldOptions: Record<MultiField, readonly string[]> = {
   postnlApis: ["Locatie", "Checkout", "Retour", "Track & Trace", "Order Management"],
 };
 
+const checkboxGroupStyle: CSSProperties = { marginTop: 8 };
+
 export default function InputsForm(): JSX.Element {
   const { input } = useClassifierState();
   const { setInput } = useClassifierActions();
+
+    const [mounted, setMounted] = useState(false);
+  const [derivedMultiOptions, setDerivedMultiOptions] = useState<Record<MultiField, string[]>>(() => ({
+    vasActiviteiten: [...multiFieldOptions.vasActiviteiten],
+    inboundBijzonderheden: [...multiFieldOptions.inboundBijzonderheden],
+    postnlApis: [...multiFieldOptions.postnlApis],
+  }));
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  useEffect(() => {
+    const next: Record<MultiField, string[]> = {
+      vasActiviteiten: [],
+      inboundBijzonderheden: [],
+      postnlApis: [],
+    };
+    (Object.keys(next) as MultiField[]).forEach((group) => {
+      const seen = new Set<string>();
+      multiFieldOptions[group].forEach((option) => {
+        if (!seen.has(option)) {
+          seen.add(option);
+          next[group].push(option);
+        }
+      });
+      Object.keys(input[group] ?? {}).forEach((option) => {
+        if (!seen.has(option)) {
+          seen.add(option);
+          next[group].push(option);
+        }
+      });
+    });
+    setDerivedMultiOptions(next);
+  }, [input]);
+
+  const memoizedNumericFields = useMemo(() => numericFields, []);
+  const memoizedSelectGroups = useMemo(() => selectFieldGroups, []);
 
   const updateInput = <K extends keyof ClassifierInput>(key: K, value: ClassifierInput[K]) => {
     setInput({ [key]: value } as Pick<ClassifierInput, K>);
@@ -129,42 +171,13 @@ export default function InputsForm(): JSX.Element {
     updateInput(group, next);
   };
 
-  const derivedMultiOptions = useMemo(() => {
-    const groups: Record<MultiField, string[]> = {
-      vasActiviteiten: [],
-      inboundBijzonderheden: [],
-      postnlApis: [],
-    };
-
-    (Object.keys(groups) as MultiField[]).forEach((group) => {
-      const seen = new Set<string>();
-      const ordered: string[] = [];
-      const predefined = multiFieldOptions[group];
-      predefined.forEach((option) => {
-        if (!seen.has(option)) {
-          seen.add(option);
-          ordered.push(option);
-        }
-      });
-      Object.keys(input[group] ?? {}).forEach((option) => {
-        if (!seen.has(option)) {
-          seen.add(option);
-          ordered.push(option);
-        }
-      });
-      groups[group] = ordered;
-    });
-
-    return groups;
-  }, [input]);
-
   return (
-    <div>
+    <div data-mounted={mounted}>
       <div className="card oc-card">
         <div className="oc-section">
           <h2>Basiskenmerken</h2>
           <div className="oc-fieldgrid">
-            {numericFields.map(({ key, label, min, max, step }) => {
+            {memoizedNumericFields.map(({ key, label, min, max, step }) => {
               const fieldId = `numeric-${key}`;
               return (
                 <div key={key} className="oc-field">
@@ -185,7 +198,7 @@ export default function InputsForm(): JSX.Element {
         </div>
       </div>
 
-      {selectFieldGroups.map(({ title, fields }) => (
+      {memoizedSelectGroups.map(({ title, fields }) => (
         <div key={title} className="card oc-card">
           <div className="oc-section">
             <h2>{title}</h2>
@@ -218,7 +231,7 @@ export default function InputsForm(): JSX.Element {
         <div key={group} className="card oc-card">
           <div className="oc-section">
             <h2>{multiFieldLabels[group]}</h2>
-            <div className="checkgroup" style={{ marginTop: 8 }}>
+            <div className="checkgroup" style={checkboxGroupStyle}>
               {derivedMultiOptions[group].map((option) => (
                 <label key={option}>
                   <input
