@@ -27,8 +27,8 @@ const ResultPanel: FC<ResultPanelProps> = ({ result, isBusy = false }) => {
   const stateStyle = isBusy ? busyState : undefined;
 
   return (
-    <div>
-      <div style={{ ...card, ...section, ...stateStyle }} aria-busy={isBusy}>
+    <div className="card">
+      <div className="card" style={{ ...card, ...section, ...stateStyle }} aria-busy={isBusy}>
         <h2 style={h2}>Resultaat</h2>
         {result ? (
           <>
@@ -68,7 +68,7 @@ const ResultPanel: FC<ResultPanelProps> = ({ result, isBusy = false }) => {
         )}
       </div>
 
-      <div style={{ ...card, ...section, ...stateStyle }} aria-busy={isBusy}>
+      <div className="card" style={{ ...card, ...section, ...stateStyle }} aria-busy={isBusy}>
         <h2 style={h2}>Top 3 bijdragen</h2>
         {result ? (
           <ol style={list}>
@@ -84,7 +84,7 @@ const ResultPanel: FC<ResultPanelProps> = ({ result, isBusy = false }) => {
         )}
       </div>
 
-      <div style={{ ...card, ...section, ...stateStyle }} aria-busy={isBusy}>
+      <div className="card" style={{ ...card, ...section, ...stateStyle }} aria-busy={isBusy}>
         <h2 style={h2}>Groepsscores</h2>
         {result ? (
           <div>
