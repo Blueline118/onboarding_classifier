@@ -22,9 +22,9 @@ type ToasterContextValue = {
 const ToasterContext = createContext<ToasterContextValue | null>(null);
 
 const palette: Record<ToastType, { background: string; color: string }> = {
-  info: { background: "#1f2937", color: "#f9fafb" },
-  success: { background: "#14532d", color: "#bbf7d0" },
-  error: { background: "#7f1d1d", color: "#fecaca" },
+  info: { background: "rgba(55,65,81,0.9)", color: "#f9fafb" },
+  success: { background: "rgba(22,163,74,0.9)", color: "#ecfdf5" },
+  error: { background: "rgba(220,38,38,0.9)", color: "#fef2f2" },
 };
 
 export function ToasterProvider({ children }: { children: ReactNode }) {
@@ -35,7 +35,7 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((toast) => toast.id !== id));
-    }, 3200);
+    }, 3000);
   }, []);
 
   const value = useMemo<ToasterContextValue>(() => ({ show }), [show]);
@@ -47,11 +47,12 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
         aria-live="polite"
         style={{
           position: "fixed",
-          top: 16,
-          right: 16,
+          bottom: 20,
+          right: 20,
           display: "flex",
           flexDirection: "column",
-          gap: 8,
+          gap: 6,
+          alignItems: "flex-end",
           zIndex: 1000,
           pointerEvents: "none",
         }}
@@ -63,16 +64,17 @@ export function ToasterProvider({ children }: { children: ReactNode }) {
               key={toast.id}
               role="status"
               style={{
-                minWidth: 220,
-                maxWidth: 320,
-                padding: "10px 14px",
-                borderRadius: 12,
-                boxShadow: "0 10px 30px rgba(15, 23, 42, 0.2)",
+                minWidth: 160,
+                maxWidth: 260,
+                padding: "6px 10px",
+                borderRadius: 8,
+                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
                 background: colors.background,
                 color: colors.color,
-                fontSize: 14,
+                fontSize: 13,
                 fontWeight: 500,
                 pointerEvents: "auto",
+                transition: "opacity 0.3s ease-in-out",
               }}
             >
               {toast.message}
