@@ -1,12 +1,14 @@
-/* eslint-disable */
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
+// src/App.tsx
+import { ToasterProvider } from "./components/ui/Toaster";
+import { ClassifierProvider } from "./features/classifier";
+import AppRouter from "./app/AppRouter";
 
-import "./index.css";
-
-ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+export default function App() {
+  return (
+    <ClassifierProvider>
+      <ToasterProvider>
+        <AppRouter />
+      </ToasterProvider>
+    </ClassifierProvider>
+  );
+}
