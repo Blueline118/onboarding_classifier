@@ -1,28 +1,30 @@
-import { createBrowserRouter, RouterProvider } from "react-router-dom";
+import { Suspense, lazy } from "react";
+import {
+  createHashRouter,   // ⬅️ i.p.v. createBrowserRouter
+  RouterProvider,
+} from "react-router-dom";
 import PublicLayout from "./layouts/PublicLayout";
 
-// Pages
-import Home from "./pages/Home";
-import OnboardingIndex from "./pages/Onboarding/Index";
+// lazy load van je werkende classifier
+const OnboardingClassifier = lazy(() => import("@/OnboardingClassifier"));
 
-// DIAGNOSE PAGE (plain text)
 function FulfilmentCalculatiePage() {
   return (
-    <div style={{ padding: 24 }}>
-      <h1>Calculatie (diagnose)</h1>
-      <p>Router werkt. Hier komt de classifier.</p>
-    </div>
+    <Suspense fallback={<div style={{ padding: 24 }}>Laden…</div>}>
+      <OnboardingClassifier />
+    </Suspense>
   );
 }
 
-const router = createBrowserRouter([
+const router = createHashRouter([
   {
-    path: "/",                    // explicit parent path
     element: <PublicLayout />,
     children: [
-      { index: true, element: <Home /> },                                 // /
-      { path: "onboarding", element: <OnboardingIndex /> },               // /onboarding
-      { path: "onboarding/fulfilment/calculatie", element: <FulfilmentCalculatiePage /> }, // /onboarding/fulfilment/calculatie
+      { path: "/", element: <div style={{ padding: 24 }}>Home (coming soon)</div> },
+      { path: "/onboarding", element: <div style={{ padding: 24 }}>Onboarding (coming soon)</div> },
+      { path: "/onboarding/fulfilment/calculatie", element: <FulfilmentCalculatiePage /> },
+      // Fallback zodat er altijd iets rendert:
+      { path: "*", element: <FulfilmentCalculatiePage /> },
     ],
   },
 ]);
