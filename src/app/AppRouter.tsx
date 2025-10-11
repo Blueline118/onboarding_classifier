@@ -1,29 +1,29 @@
-import { Suspense, lazy } from "react";
-import {
-  createHashRouter,   // ⬅️ i.p.v. createBrowserRouter
-  RouterProvider,
-} from "react-router-dom";
+import { createHashRouter, RouterProvider } from "react-router-dom";
 import PublicLayout from "./layouts/PublicLayout";
 
-// lazy load van je werkende classifier
-const OnboardingClassifier = lazy(() => import("@/OnboardingClassifier"));
+// ⛔ weg met lazy + alias; ✅ directe relatieve import (prod-proof)
+import OnboardingClassifier from "../OnboardingClassifier";
 
 function FulfilmentCalculatiePage() {
-  return (
-    <Suspense fallback={<div style={{ padding: 24 }}>Laden…</div>}>
-      <OnboardingClassifier />
-    </Suspense>
-  );
+  return <OnboardingClassifier />;
+}
+
+// Heel eenvoudige zichtbare pagina’s om router te bewijzen
+function HomePage() {
+  return <div style={{ padding: 24 }}>Home — router werkt ✅</div>;
+}
+function OnboardingIndex() {
+  return <div style={{ padding: 24 }}>Onboarding — coming soon</div>;
 }
 
 const router = createHashRouter([
   {
     element: <PublicLayout />,
     children: [
-      { path: "/", element: <div style={{ padding: 24 }}>Home (coming soon)</div> },
-      { path: "/onboarding", element: <div style={{ padding: 24 }}>Onboarding (coming soon)</div> },
+      { path: "/", element: <HomePage /> },
+      { path: "/onboarding", element: <OnboardingIndex /> },
       { path: "/onboarding/fulfilment/calculatie", element: <FulfilmentCalculatiePage /> },
-      // Fallback zodat er altijd iets rendert:
+      // Fallback: toon iig de calculator i.p.v. leeg scherm
       { path: "*", element: <FulfilmentCalculatiePage /> },
     ],
   },
