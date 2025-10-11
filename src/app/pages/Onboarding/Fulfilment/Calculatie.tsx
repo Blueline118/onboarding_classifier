@@ -1,8 +1,5 @@
-export default function Page() {
-  return (
-    <div style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 20, fontWeight: 700 }}>Fulfilment calculatie</h1>
-      <p>Coming soon…</p>
-    </div>
-  );
+import OnboardingClassifier from "@/OnboardingClassifier";
+
+export default function FulfilmentCalculatie() {
+  return <OnboardingClassifier />;
 }

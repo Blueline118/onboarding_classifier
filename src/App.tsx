@@ -1,8 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 
-import OnboardingClassifier from "./OnboardingClassifier";
 import { ToasterProvider } from "./components/ui/Toaster";
 import { ClassifierProvider } from "./features/classifier";
+import AppRouter from "./app/AppRouter";
 
 export default function App(): JSX.Element {
   const [isMounted, setIsMounted] = useState(false);
@@ -12,7 +12,8 @@ export default function App(): JSX.Element {
   }, []);
 
   const content = useMemo(() => {
-    return isMounted ? <OnboardingClassifier /> : <React.Fragment />;
+    // Router pas renderen na mount (voorkomt edge-cases met SSR-like checks)
+    return isMounted ? <AppRouter /> : <React.Fragment />;
   }, [isMounted]);
 
   return (
