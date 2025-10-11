@@ -1,5 +1,11 @@
-import OnboardingClassifier from "@/OnboardingClassifier";
+import { Suspense, lazy } from "react";
+
+const OnboardingClassifier = lazy(() => import("@/OnboardingClassifier"));
 
 export default function FulfilmentCalculatie() {
-  return <OnboardingClassifier />;
+  return (
+    <Suspense fallback={<div style={{ padding: 24 }}>Laden…</div>}>
+      <OnboardingClassifier />
+    </Suspense>
+  );
 }
