@@ -6,6 +6,7 @@ import AppRouter from "./app/AppRouter";
 
 export default function App(): JSX.Element {
   const [isMounted, setIsMounted] = useState(false);
+console.log("[BOOT] App render");
 
   useEffect(() => {
     setIsMounted(true);
